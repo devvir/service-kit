@@ -1,11 +1,14 @@
 import { EventEmitter } from 'node:events';
 import type { Bindings, Config, ServiceConfig, Spec } from '..';
 import { JsonKey } from '../types/shared';
+import { logger } from '..';
 
 export default class extends EventEmitter {
+  logger = logger;
+
+  #plugins: string[];
   #spec: Spec;
   #bindings: Bindings;
-  #plugins: string[];
   #config: ServiceConfig;
 
   constructor(config: Config) {

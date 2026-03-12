@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:stream';
 import type { JsonKey, JsonValue } from './shared.js';
+import pino from 'pino';
 
 export interface ServiceKit {
   create(config?: Config): ServiceKit;
@@ -17,6 +18,8 @@ export interface Service extends EventEmitter {
   spec(): Spec;
   bindings(): Bindings;
   plugins(): string[];
+
+  logger: pino.Logger;
 
   emit(e: string, ...args: unknown[]): boolean;
   hasListeners(event: string): boolean;

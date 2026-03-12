@@ -1,11 +1,9 @@
 import run from './runner';
-import state from '../plugins/state';
-import health from '../plugins/health';
-import shutdown from '../plugins/shutdown';
-import type { Spec, Bindings, Plugin, Config, ServiceKit, ServiceFn, PartialConfig } from '../types';
+import * as plugins from '../plugins';
+import type { Spec, Bindings, Plugin, Config, ServiceKit, ServiceFn, PartialConfig } from '..';
 
 let skDefaults: PartialConfig = {
-  plugins: [ state, health, shutdown ],
+  plugins: [ plugins.state, plugins.health, plugins.shutdown ],
   spec: { name: 'service', config: {} },
 };
 

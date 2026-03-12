@@ -12,7 +12,7 @@ export default async function runner(serviceFn: ServiceFn, context: Context): Pr
 
   const service: IService = Object.assign(
     new Service(config),
-    ...pluginExtensions(config)
+    ...pluginExtensions(config),
   );
 
   initializePlugins(config.plugins, service);
