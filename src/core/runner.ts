@@ -28,10 +28,10 @@ export default async function runner(serviceFn: ServiceFn, context: Context): Pr
     service.logger.error({ err }, '[service-kit] fatal error — shutting down');
 
     if ('shutdown' in service && typeof (service as any).shutdown === 'function') {
-      (service as any).shutdown('ERROR');
+      await (service as any).shutdown('ERROR');
     }
 
-    process.exit(1);
+    throw err;
   }
 }
 
