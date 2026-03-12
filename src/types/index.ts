@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:stream';
 import type { JsonKey, JsonValue } from './shared.js';
 
 export interface ServiceKit {
@@ -10,7 +11,16 @@ export interface ServiceKit {
   set defaults(config: Config);
 }
 
-export interface Service {}
+export interface Service extends EventEmitter {
+  config(key?: JsonKey): ServiceConfig | undefined | unknown;
+
+  spec(): Spec;
+  bindings(): Bindings;
+  plugins(): string[];
+
+  emit(e: string, ...args: unknown[]): boolean;
+  hasListeners(event: string): boolean;
+}
 
 export interface PartialConfig {
   plugins?:  Plugin[];
@@ -22,7 +32,7 @@ export type Config = Required<PartialConfig>;
 
 export interface Plugin {
   name:     string;
-  init?:    (config: Config) => void | Promise<void>;
+  init?:    (service: Service) => void | Promise<void>;
   extends?: (config: Config) => Record<JsonKey, unknown>;
 }
 
@@ -32,6 +42,12 @@ export interface Spec {
   [key: JsonKey]: JsonValue;
 }
 
-export type Bindings = Record<`on${string}`, (service: Service, ...rest: any) => void>;
+export type ServiceListener = (service: Service, ...rest: any[]) => void | Promise<void>;
+
+export interface Bindings {
+  [key: `on${string}`]: ServiceListener | undefined;
+}
 
 export type ServiceFn = (service: Service) => void | Promise<void>;
+
+export type ServiceConfig = Record<JsonKey, unknown>;
