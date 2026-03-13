@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:stream';
-import type { JsonKey, JsonValue } from './shared.js';
+import type { JsonKey } from './shared.js';
 import pino from 'pino';
 
 export interface ServiceKit {
@@ -41,8 +41,8 @@ export interface Plugin {
 
 export interface Spec {
   name?:   string;
-  config?: Record<JsonKey, JsonValue>;
-  [key: JsonKey]: JsonValue;
+  config?: Record<string, unknown>;
+  [key: JsonKey]: unknown;
 }
 
 export type ServiceListener = (service: Service, ...rest: any[]) => void | Promise<void>;

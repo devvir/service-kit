@@ -2,6 +2,8 @@ import type { ServiceFn, Spec, Bindings, Config, Plugin, Service as IService } f
 import type { Context } from '../types/core';
 import { JsonKey } from '../types/shared';
 import Service from './service';
+import { logger } from '..';
+import { registerLogging } from './logging.js';
 
 export default async function runner(serviceFn: ServiceFn, context: Context): Promise<void> {
   const config: Config = {
@@ -10,14 +12,20 @@ export default async function runner(serviceFn: ServiceFn, context: Context): Pr
     bindings: mergeSources<Bindings>(context.defaults.bindings, context.bindings),
   }
 
+  logger.debug({ name: config.spec.name, plugins: config.plugins.map(p => p.name) }, '[service-kit] assembling service');
+
   const service: IService = Object.assign(
     new Service(config),
     ...pluginExtensions(config),
   );
 
+  registerLogging(service);
+
+  logger.debug({ plugins: config.plugins.map(p => p.name) }, '[service-kit] initializing plugins');
   initializePlugins(config.plugins, service);
   service.emit('created');
 
+  logger.debug('[service-kit] registering bindings');
   registerListeners(service, config);
   service.emit('started');
 
@@ -56,9 +64,8 @@ function pluginExtensions(config: Config): Record<JsonKey, unknown>[] {
 }
 
 function initializePlugins(plugins: Plugin[], service: IService): void {
-  for (const plugin of plugins) {
+  for (const plugin of plugins)
     plugin.init?.(service);
-  }
 }
 
 function registerListeners(service: IService, config: Config) {

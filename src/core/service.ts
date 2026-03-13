@@ -47,5 +47,11 @@ export default class extends EventEmitter {
   }
 
   /** Pass this service instance as first argument to registered listeners */
-  emit(e: string, ...args: unknown[]) { return super.emit(e, this, ...args); }
+  emit(e: string, ...args: unknown[]) {
+    if (e !== 'healthCheck') {
+      this.logger.debug({ event: e, ...(args.length ? { args } : {}) }, `[service-kit] → ${e}`);
+    }
+
+    return super.emit(e, this, ...args);
+  }
 }

@@ -12,10 +12,7 @@ export default {
   name: 'Health',
 
   init(service: Service) {
-    if (service.spec().healthcheck === false)
-      return;
-
-
+    if (service.spec().healthcheck === false) return;
 
     const server = startServer(service);
 
@@ -44,7 +41,9 @@ function startServer(service: Service): http.Server {
     }
   });
 
-  return server.listen(port);
+  return server.listen(port, () => {
+    service.logger.info({ port }, '[health] healthcheck listening');
+  });
 };
 
 function resolvePort(spec: Spec): number {

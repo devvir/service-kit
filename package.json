@@ -1,29 +1,44 @@
 {
   "name": "@devvir/service-kit",
   "version": "0.0.1",
+  "description": "A lightweight toolkit for Node.js microservices. Health checks, graceful shutdown, and automatic management of dependencies",
+  "author": "Diego Indart <db.indart.dev@gmail.com>",
+  "license": "ISC",
   "private": false,
-  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
   },
+  "keywords": [
+    "service",
+    "microservice",
+    "lifecycle",
+    "health-checks",
+    "orchestration"
+  ],
   "dependencies": {
+    "@devvir/rabbitmq": "workspace:*",
+    "amqplib": "^0.10.0",
+    "mongodb": "^6.0.0",
     "pino": "^10.3.1",
-    "pino-pretty": "^10.3.1"
+    "pino-pretty": "^10.3.1",
+    "redis": "^4.0.0"
   },
   "devDependencies": {
-    "@types/node": "^25.3.0",
+    "@types/amqplib": "^0.10.8",
+    "@types/node": "^25.3.5",
     "@vitest/coverage-v8": "^4.0.18",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
       "import": "./dist/index.js"
     }
   }
