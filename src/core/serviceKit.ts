@@ -3,8 +3,16 @@ import * as plugins from '../plugins';
 import type { Spec, Bindings, Plugin, Config, ServiceKit, ServiceFn, PartialConfig } from '..';
 
 let skDefaults: PartialConfig = {
-  plugins: [ plugins.state, plugins.health, plugins.shutdown ],
-  spec: { name: 'service', config: {} },
+  plugins: [
+    plugins.state,
+    plugins.health,
+    plugins.shutdown,
+    plugins.providers,
+  ],
+  spec: {
+    name: 'service',
+    config: {},
+  },
 };
 
 class SK implements ServiceKit {
