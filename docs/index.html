@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>@devvir/service-kit</title>
+<style>
+  :root {
+    --bg:          #ffffff;
+    --fg:          #1a1a1a;
+    --fg-muted:    #555;
+    --fg-subtle:   #888;
+    --fg-dim:      #333;
+    --border:      #e5e5e5;
+    --border-faint:#f0f0f0;
+    --nav-bg:      #f8f8f8;
+    --nav-fg:      #444;
+    --nav-fg-bold: #111;
+    --nav-hover:   #efefef;
+    --link:        #0066cc;
+    --code-bg:     #f3f3f3;
+    --code-fg:     #c7254e;
+    --surface:     #f8f8f8;
+    --note-bg:     #f0f7ff;
+    --note-border: #0066cc;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:          #0d1117;
+      --fg:          #e6edf3;
+      --fg-muted:    #8b949e;
+      --fg-subtle:   #7d8590;
+      --fg-dim:      #b1bac4;
+      --border:      #30363d;
+      --border-faint:#21262d;
+      --nav-bg:      #161b22;
+      --nav-fg:      #8b949e;
+      --nav-fg-bold: #e6edf3;
+      --nav-hover:   #21262d;
+      --link:        #58a6ff;
+      --code-bg:     #21262d;
+      --code-fg:     #ff7b72;
+      --surface:     #161b22;
+      --note-bg:     #0d1926;
+      --note-border: #388bfd;
+    }
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; font-size: 15px; line-height: 1.6; color: var(--fg); background: var(--bg); display: flex; }
+  nav { width: 240px; min-width: 240px; height: 100vh; position: sticky; top: 0; overflow-y: auto; background: var(--nav-bg); border-right: 1px solid var(--border); padding: 24px 0; font-size: 13px; }
+  nav .logo { padding: 0 20px 20px; font-weight: 700; font-size: 14px; color: var(--nav-fg-bold); border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+  nav .logo span { color: var(--fg-subtle); font-weight: 400; }
+  nav ul { list-style: none; }
+  nav .section-label { padding: 16px 20px 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-subtle); }
+  nav a { display: block; padding: 5px 20px; color: var(--nav-fg); text-decoration: none; border-left: 2px solid transparent; }
+  nav a:hover { color: var(--nav-fg-bold); background: var(--nav-hover); }
+  nav a.active { color: var(--nav-fg-bold); border-left-color: var(--link); font-weight: 500; }
+  main { flex: 1; min-width: 0; padding: 48px 64px; max-width: 900px; }
+  h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+  h2 { font-size: 20px; font-weight: 600; margin: 48px 0 16px; padding-top: 48px; border-top: 1px solid var(--border); }
+  h3 { font-size: 16px; font-weight: 600; margin: 32px 0 12px; }
+  h4 { font-size: 14px; font-weight: 600; margin: 24px 0 8px; color: var(--fg-dim); }
+  p { margin-bottom: 14px; }
+  p:last-child { margin-bottom: 0; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 13px; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; color: var(--code-fg); }
+  pre { background: #1e1e1e; color: #d4d4d4; padding: 20px 24px; border-radius: 6px; overflow-x: auto; margin: 16px 0; line-height: 1.5; }
+  pre code { background: none; color: inherit; padding: 0; font-size: 13px; }
+  .kw  { color: #569cd6; }
+  .st  { color: #ce9178; }
+  .cm  { color: #6a9955; }
+  .ty  { color: #4ec9b0; }
+  .fn  { color: #dcdcaa; }
+  .nu  { color: #b5cea8; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th { text-align: left; padding: 8px 12px; background: var(--surface); border-bottom: 2px solid var(--border); font-weight: 600; }
+  td { padding: 8px 12px; border-bottom: 1px solid var(--border-faint); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .note { background: var(--note-bg); border-left: 3px solid var(--note-border); padding: 12px 16px; margin: 16px 0; border-radius: 0 4px 4px 0; font-size: 14px; }
+  .tagline { color: var(--fg-muted); font-size: 16px; margin: 8px 0 32px; }
+  .flow { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 16px 20px; font-family: 'SF Mono', monospace; font-size: 13px; line-height: 2; margin: 16px 0; color: var(--fg-dim); }
+  section { scroll-margin-top: 24px; }
+  ul.bullets { margin: 0 0 16px 20px; line-height: 2; }
+  .sig { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 10px 14px; margin: 12px 0; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">@devvir/service-kit <span>v0.1</span></div>
+  <ul>
+    <li class="section-label">Getting Started</li>
+    <li><a href="#intro">What is service-kit?</a></li>
+    <li><a href="#install">Install</a></li>
+    <li><a href="#getting-started">Your first service</a></li>
+    <li><a href="#events">Events</a></li>
+    <li class="section-label">Plugins</li>
+    <li><a href="#plugins">Overview</a></li>
+    <li><a href="#healthchecks">Health checks</a></li>
+    <li><a href="#shutdown">Graceful shutdown</a></li>
+    <li><a href="#state">State</a></li>
+    <li class="section-label">Providers</li>
+    <li><a href="#providers">Connecting providers</a></li>
+    <li><a href="#mongodb">MongoDB</a></li>
+    <li><a href="#rabbitmq">RabbitMQ</a></li>
+    <li><a href="#redis">Redis</a></li>
+    <li class="section-label">Advanced</li>
+    <li><a href="#advanced">SK.create()</a></li>
+    <li><a href="#custom-plugins">Custom plugins</a></li>
+    <li class="section-label">API Reference</li>
+    <li><a href="#api-sk">ServiceKit (SK)</a></li>
+    <li><a href="#api-service">Service</a></li>
+    <li><a href="#api-spec">Spec</a></li>
+    <li><a href="#api-bindings">Bindings</a></li>
+    <li><a href="#api-events">Events</a></li>
+    <li class="section-label">Examples</li>
+    <li><a href="#ex-consumer">Message consumer</a></li>
+    <li><a href="#ex-api">API server</a></li>
+    <li><a href="#ex-batch">Batch job</a></li>
+    <li><a href="#ex-preset">Project preset</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<!-- ============================================================ -->
+<section id="intro">
+<h1>@devvir/service-kit</h1>
+<p class="tagline">A lightweight toolkit for Node.js microservices. Health checks, graceful shutdown, and provider connections — in one place.</p>
+
+<p>Most Node.js services need the same boilerplate: start a health endpoint, connect to a database or queue, handle SIGTERM, and disconnect cleanly on shutdown. Service-kit handles all of that so you can focus on what the service actually does.</p>
+
+<p>There are two objects you interact with:</p>
+<ul class="bullets">
+  <li><strong>SK</strong> — the builder. Call <code>.declare()</code> and <code>.bind()</code> to describe the service's needs, then <code>.run()</code> to start it.</li>
+  <li><strong>Service</strong> — the runtime object passed to your function and all event handlers. Gives access to providers, config, state, and the event system.</li>
+</ul>
+</section>
+
+<!-- ============================================================ -->
+<section id="install">
+<h2>Install</h2>
+<pre><code>pnpm add @devvir/service-kit
+# or
+yarn add @devvir/service-kit
+# or
+npm install @devvir/service-kit</code></pre>
+</section>
+
+<!-- ============================================================ -->
+<section id="getting-started">
+<h2>Your first service</h2>
+
+<p>The minimal case — just import and run:</p>
+
+<pre><code><span class="kw">import</span> SK <span class="kw">from</span> <span class="st">'@devvir/service-kit'</span>;
+
+SK.<span class="fn">run</span>(<span class="kw">async</span> (service) => {
+  service.logger.<span class="fn">info</span>(<span class="st">'Running!'</span>);
+});</code></pre>
+
+<p>Out of the box you get a health check on port 3000 and graceful shutdown on SIGTERM/SIGINT. No configuration required.</p>
+
+<p>To declare a name and pass in some config:</p>
+
+<pre><code><span class="kw">import</span> SK <span class="kw">from</span> <span class="st">'@devvir/service-kit'</span>;
+
+SK.<span class="fn">declare</span>({
+  name:   <span class="st">'api'</span>,
+  config: { port: <span class="fn">parseInt</span>(process.env.PORT || <span class="st">'3001'</span>) },
+});
+
+SK.<span class="fn">run</span>(<span class="kw">async</span> (service) => {
+  <span class="kw">const</span> port = service.<span class="fn">config</span>(<span class="st">'port'</span>) <span class="kw">as</span> number;
+  <span class="fn">startServer</span>(port);
+});</code></pre>
+
+<p><code>.declare()</code>, <code>.bind()</code>, and <code>.use()</code> mutate the instance and return it for chaining. You can chain calls or split them across lines:</p>
+
+<pre><code>SK
+  .<span class="fn">declare</span>({ name: <span class="st">'worker'</span>, config: { ... } })
+  .<span class="fn">bind</span>({ onShutdown: cleanup });
+
+SK.<span class="fn">run</span>(<span class="kw">async</span> (service) => { ... });</code></pre>
+
+<p><code>.run()</code> is always the final step. It starts the service, connects any declared providers, registers signal handlers, and calls your function. In a typical project you would separate the declaration from the run call — <code>.declare()</code> and <code>.bind()</code> in one file, <code>.run()</code> in the entry point.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="events">
+<h2>Events</h2>
+
+<p><code>Service</code> is an <code>EventEmitter</code>. Everything the standard Node.js EventEmitter API offers — <code>on</code>, <code>once</code>, <code>off</code>, <code>emit</code>, <code>removeAllListeners</code>, and so on — works on a service instance directly.</p>
+
+<p>One difference from a plain EventEmitter: all listeners receive the <code>service</code> instance as their first argument, prepended before any arguments passed to <code>emit</code>:</p>
+
+<pre><code>service.<span class="fn">emit</span>(<span class="st">'ready'</span>, port);
+<span class="cm">// listener receives: (service, port)</span>
+
+service.<span class="fn">on</span>(<span class="st">'ready'</span>, (service, port) => {
+  service.logger.<span class="fn">info</span>({ port }, <span class="st">'ready'</span>);
+});</code></pre>
+
+<p>You can fire and listen for any event — system events emitted by plugins (<code>'shutdown'</code>, <code>'healthCheck'</code>, <code>'providerConnected'</code>), or your own:</p>
+
+<pre><code>service.<span class="fn">emit</span>(<span class="st">'message'</span>);
+service.<span class="fn">emit</span>(<span class="st">'batchComplete'</span>, count);</code></pre>
+
+<p>Listeners can be registered with <code>service.on()</code> anywhere you have access to the service, or declared statically via <code>SK.bind()</code>. Bindings use the convention <code>on</code> + event name in PascalCase:</p>
+
+<pre><code>SK.<span class="fn">bind</span>({
+  onShutdown:        (service, signal) => { ... },
+  onMessage:         (service) => { ... },
+  onBatchComplete:   (service, count) => { ... },
+});</code></pre>
+
+<p>A binding named <code>onFoo</code> registers a listener for the <code>'foo'</code> event. Bindings are equivalent to calling <code>service.on('foo', handler)</code> — they are just a convenient declarative form.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="plugins">
+<h2>Plugins</h2>
+
+<p>Service-kit is built around plugins. Four plugins are active by default — you get all of them without any configuration:</p>
+
+<table>
+  <tr><th>Plugin</th><th>What it provides</th></tr>
+  <tr><td><strong>Health</strong></td><td>HTTP health check server on port 3000. Customize the port, response, or logic via <code>onHealthCheck</code>.</td></tr>
+  <tr><td><strong>Shutdown</strong></td><td>Listens for SIGTERM and SIGINT. Fires <code>onShutdown</code> handlers, then disconnects providers. Adds <code>service.shutdown()</code> for programmatic shutdown.</td></tr>
+  <tr><td><strong>State</strong></td><td>A mutable key/value store on the service. Useful for counters, flags, and values shared between handlers. Adds <code>service.state()</code>, <code>service.setState()</code>, <code>service.increment()</code>, and <code>service.decrement()</code>.</td></tr>
+  <tr><td><strong>Providers</strong></td><td>Manages external connections (databases, queues, caches). Adds <code>service.providers.connect()</code>.</td></tr>
+</table>
+
+<p>Each of these is covered in detail in the sections below. You can also write your own plugins — see <a href="#custom-plugins">Custom plugins</a>.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="healthchecks">
+<h2>Health checks</h2>
+
+<p>A health check HTTP server starts automatically on port 3000. By default it responds to any request with <code>{"status":"ok"}</code> and a 200 status. After each request, the plugin updates <code>state.healthy</code> to <code>true</code> if the response status was 2xx, or <code>false</code> otherwise — readable via <code>service.isHealthy()</code>.</p>
+
+<pre><code>$ curl http://localhost:3000/health
+{"status":"ok"}</code></pre>
+
+<p>To change the port or disable the health check entirely:</p>
+
+<pre><code>SK.<span class="fn">declare</span>({ healthcheck: { port: <span class="nu">8080</span> } });  <span class="cm">// custom port</span>
+SK.<span class="fn">declare</span>({ healthcheck: <span class="kw">false</span> });            <span class="cm">// disabled</span></code></pre>
+
+<h3>Custom health logic</h3>
+
+<p>Register an <code>onHealthCheck</code> handler to control the response. The handler receives the service and the raw <code>ServerResponse</code> — write to it directly:</p>
+
+<pre><code>SK.<span class="fn">bind</span>({
+  onHealthCheck: (service, res) => {
+    <span class="kw">const</span> healthy = service.<span class="fn">isHealthy</span>();
+    res.<span class="fn">writeHead</span>(healthy ? <span class="nu">200</span> : <span class="nu">503</span>, { <span class="st">'Content-Type'</span>: <span class="st">'application/json'</span> });
+    res.<span class="fn">end</span>(<span class="ty">JSON</span>.<span class="fn">stringify</span>({ healthy, uptime: process.<span class="fn">uptime</span>() }));
+  },
+});
+
+SK.<span class="fn">run</span>(<span class="kw">async</span> (service) => { ... });</code></pre>
+
+<h3>Orchestrator integration</h3>
+
+<pre><code><span class="cm"># Docker Compose</span>
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+  interval: 30s
+  timeout: 5s
+  retries: 3
+
+<span class="cm"># Kubernetes</span>
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 3000
+  initialDelaySeconds: 10
+  periodSeconds: 30</code></pre>
+</section>
+
+<!-- ============================================================ -->
+<section id="shutdown">
+<h2>Graceful shutdown</h2>
+
+<p>The shutdown plugin listens for SIGTERM and SIGINT. When either signal is received, it awaits all <code>onShutdown</code> handlers (async handlers are fully awaited), and disconnects all providers. Then it awaits all <code>onShutdownComplete</code> handlers, and finally exits.</p>
+
+<p>Register cleanup logic with <code>.bind()</code>:</p>
+
+<pre><code>SK.<span class="fn">bind</span>({
+  onShutdown: <span class="kw">async</span> (service, signal) => {
+    service.logger.<span class="fn">info</span>(<span class="st">`Shutting down (${signal})...`</span>);
+    <span class="kw">await</span> <span class="fn">flushPendingWrites</span>();
+  },
+});
+
+SK.<span class="fn">run</span>(<span class="kw">async</span> (service) => { ... });</code></pre>
+
+<p>You can also register handlers inside <code>.run()</code> via <code>service.on()</code> — useful when you need access to objects that are only available at runtime:</p>
+
+<pre><code>SK.<span class="fn">run</span>(<span class="kw">async</span> (service) => {
+  <span class="kw">const</span> server = app.<span class="fn">listen</span>(<span class="nu">3001</span>);
+
+  service.<span class="fn">on</span>(<span class="st">'shutdown'</span>, () => {
+    server.<span class="fn">close</span>();
+  });
+});</code></pre>
+
+<p>To trigger shutdown programmatically (for example, after a fatal error your service can't recover from):</p>
+
+<pre><code>service.<span class="fn">shutdown</span>();          <span class="cm">// signal: 'MANUAL'</span>
+service.<span class="fn">shutdown</span>(<span class="st">'TIMEOUT'</span>); <span class="cm">// custom signal string</span></code></pre>
+
+<p>Match your orchestrator's grace period to your cleanup time:</p>
+
+<pre><code><span class="cm"># Docker Compose</span>
+stop_grace_period: 30s
+
+<span class="cm"># Kubernetes</span>
+terminationGracePeriodSeconds: 30</code></pre>
+</section>
+
+<!-- ============================================================ -->
+<section id="state">
+<h2>State</h2>
+
+<p>The state plugin provides a mutable key/value store on the service. It is useful for runtime values that need to be shared between your service function and event handlers — counters, flags, timestamps, and similar.</p>
+
+<p>Declare initial state in the spec:</p>
+
+<pre><code>SK.<span class="fn">declare</span>({
+  state: { requestCount: <span class="nu">0</span>, ready: <span class="kw">false</span> },
+});</code></pre>
+
+<p>Then read and write from anywhere that receives the <code>service</code> object:</p>
+
+<pre><code><span class="cm">// Read</span>
+service.<span class="fn">state</span>()             <span class="cm">// → full state object (shallow copy)</span>
+service.<span class="fn">state</span>(<span class="st">'requestCount'</span>) <span class="cm">// → single value</span>
+
+<span class="cm">// Write</span>
+service.<span class="fn">setState</span>(<span class="st">'ready'</span>, <span class="kw">true</span>);
+service.<span class="fn">increment</span>(<span class="st">'requestCount'</span>); <span class="cm">// +1; initializes to 1 if missing</span>
+service.<span class="fn">decrement</span>(<span class="st">'requestCount'</span>); <span class="cm">// -1; initializes to -1 if missing</span></code></pre>
+
+<p>Example — tracking message throughput and using it in a health check:</p>
+
+<pre><code>SK
+  .<span class="fn">declare</span>({ state: { messages: <span class="nu">0</span>, lastMessageAt: <span class="kw">null</span> } })
+  .<span class="fn">bind</span>({
+    onMessage: (service) => {
+      service.<span class="fn">increment</span>(<span class="st">'messages'</span>);
+      service.<span class="fn">setState</span>(<span class="st">'lastMessageAt'</span>, Date.<span class="fn">now</span>());
+    },
+    onHealthCheck: (service, res) => {
+      <span class="kw">const</span> last    = service.<span class="fn">state</span>(<span class="st">'lastMessageAt'</span>) <span class="kw">as</span> number | <span class="kw">null</span>;
+      <span class="kw">const</span> healthy = last !== <span class="kw">null</span> && (Date.<span class="fn">now</span>() - last < <span class="nu">30_000</span>);
+      res.<span class="fn">writeHead</span>(healthy ? <span class="nu">200</span> : <span class="nu">503</span>, { <span class="st">'Content-Type'</span>: <span class="st">'application/json'</span> });
+      res.<span class="fn">end</span>(<span class="ty">JSON</span>.<span class="fn">stringify</span>({ healthy, messages: service.<span class="fn">state</span>(<span class="st">'messages'</span>) }));
+    },
+  });
+
+SK.<span class="fn">run</span>(<span class="kw">async</span> (service) => {
+  <span class="cm">// ... consume messages, call service.emit('message') for each</span>
+});</code></pre>
+
+<p class="note"><strong>Note:</strong> <code>increment</code> and <code>decrement</code> require the key to hold a number (or be unset). Calling them on a non-numeric key throws.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="providers">
+<h2>Connecting providers</h2>
+
+<p>Providers are external connections — databases, queues, caches. Declare them in the spec under the <code>providers</code> key, then connect to them by name inside <code>.run()</code>.</p>
+
+<pre><code>SK.<span class="fn">declare</span>({
+  providers: {
+    mongodb:  { url: process.env.MONGODB_URL },
+    rabbitmq: { url: process.env.RABBITMQ_URL },
+  },
+});
+
+SK.<span class="fn">run</span>(<span class="kw">async</span> (service) => {
+  <span class="kw">const</span> [db, broker] = <span class="kw">await</span> service.providers.<span class="fn">connect</span>([<span class="st">'mongodb'</span>, <span class="st">'rabbitmq'</span>]);
+});</code></pre>
+
+<p><code>service.providers.connect(name)</code> establishes the connection and returns the client. Pass an array to connect multiple providers in parallel.</p>
+
+<p>The provider key is also the provider type by default (<code>'mongodb'</code>, <code>'rabbitmq'</code>, <code>'redis'</code>). To use a custom name, add a <code>provider</code> field:</p>
+
+<pre><code>providers: {
+  primary: { provider: <span class="st">'mongodb'</span>, url: process.env.MONGODB_PRIMARY_URL },
+  replica: { provider: <span class="st">'mongodb'</span>, url: process.env.MONGODB_REPLICA_URL },
+}</code></pre>
+
+<h3>Retry</h3>
+
+<p>Connection failures are retried automatically. The default is a linear backoff. Override per provider:</p>
+
+<pre><code>providers: {
+  mongodb: {
+    url:   process.env.MONGODB_URL,
+    retry: { strategy: <span class="st">'exponential'</span>, delay: <span class="nu">1000</span>, maxDelay: <span class="nu">30_000</span>, attempts: <span class="nu">10</span> },
+  },
+}</code></pre>
+
+<h3>Disconnect events</h3>
+
+<p>Use <code>onProviderConnected</code> and <code>onProviderDisconnected</code> to react to connection state changes:</p>
+
+<pre><code>SK.<span class="fn">bind</span>({
+  onProviderConnected:    (service, type, name) => service.logger.<span class="fn">info</span>(<span class="st">`${name} connected`</span>),
+  onProviderDisconnected: (service, type, name) => service.logger.<span class="fn">warn</span>(<span class="st">`${name} disconnected`</span>),
+});</code></pre>
+</section>
+
+<!-- ============================================================ -->
+<section id="mongodb">
+<h2>MongoDB</h2>
+
+<p>The MongoDB provider returns a <code>MongoClient</code> instance from the official driver.</p>
+
+<pre><code><span class="kw">import</span> <span class="kw">type</span> { <span class="ty">MongoClient</span> } <span class="kw">from</span> <span class="st">'mongodb'</span>;
+
+SK.<span class="fn">declare</span>({
+  providers: {
+    mongodb: { url: process.env.MONGODB_URL },
+  },
+});
+
+SK.<span class="fn">run</span>(<span class="kw">async</span> (service) => {
+  <span class="kw">const</span> client = <span class="kw">await</span> service.providers.<span class="fn">connect</span>(<span class="st">'mongodb'</span>) <span class="kw">as</span> <span class="ty">MongoClient</span>;
+  <span class="kw">const</span> db     = client.<span class="fn">db</span>(<span class="st">'myapp'</span>);
+  <span class="kw">const</span> user   = <span class="kw">await</span> db.<span class="fn">collection</span>(<span class="st">'users'</span>).<span class="fn">findOne</span>({ email: <span class="st">'x@example.com'</span> });
+});</code></pre>
+</section>
+
+<!-- ============================================================ -->
+<section id="rabbitmq">
+<h2>RabbitMQ</h2>
+
+<p>The RabbitMQ provider can return either a raw amqplib connection or a higher-level <code>Broker</code> instance. Set <code>useBroker: true</code> to get the <code>Broker</code>:</p>
+
+<pre><code><span class="kw">import</span> <span class="kw">type</span> { <span class="ty">Broker</span> } <span class="kw">from</span> <span class="st">'@devvir/rabbitmq'</span>;
+
+SK.<span class="fn">declare</span>({
+  providers: {
+    rabbitmq: { url: process.env.RABBITMQ_URL, useBroker: <span class="kw">true</span> },
+  },
+});
+
+SK.<span class="fn">run</span>(<span class="kw">async</span> (service) => {
+  <span class="kw">const</span> broker = <span class="kw">await</span> service.providers.<span class="fn">connect</span>(<span class="st">'rabbitmq'</span>) <span class="kw">as</span> <span class="ty">Broker</span>;
+  <span class="kw">const</span> queue  = broker.<span class="fn">getQueue</span>(<span class="st">'jobs'</span>)!;
+
+  <span class="kw">await</span> queue.<span class="fn">consume</span>(<span class="kw">async</span> (message, delivery) => {
+    <span class="kw">await</span> <span class="fn">processJob</span>(message);
+    delivery.<span class="fn">ack</span>();
+  });
+});</code></pre>
+
+<h3>Topology declaration</h3>
+
+<p>Pass a <code>topology</code> spec to declare exchanges and queues on connect, declaratively:</p>
+
+<pre><code>providers: {
+  rabbitmq: {
+    url:      process.env.RABBITMQ_URL,
+    useBroker: <span class="kw">true</span>,
+    topology: {
+      exchanges: {
+        events: {
+          type:   <span class="st">'topic'</span>,
+          queues: { <span class="st">'events.processor'</span>: { routingKey: <span class="st">'#'</span> } },
+        },
+      },
+    },
+  },
+}</code></pre>
+</section>
+
+<!-- ============================================================ -->
+<section id="redis">
+<h2>Redis</h2>
+
+<p>The Redis provider returns an <code>ioredis</code> client.</p>
+
+<pre><code><span class="kw">import</span> <span class="kw">type</span> { <span class="ty">Redis</span> } <span class="kw">from</span> <span class="st">'ioredis'</span>;
+
+SK.<span class="fn">declare</span>({
+  providers: {
+    redis: { url: process.env.REDIS_URL },
+  },
+});
+
+SK.<span class="fn">run</span>(<span class="kw">async</span> (service) => {
+  <span class="kw">const</span> redis = <span class="kw">await</span> service.providers.<span class="fn">connect</span>(<span class="st">'redis'</span>) <span class="kw">as</span> <span class="ty">Redis</span>;
+  <span class="kw">await</span> redis.<span class="fn">set</span>(<span class="st">'key'</span>, <span class="st">'value'</span>, <span class="st">'EX'</span>, <span class="nu">3600</span>);
+});</code></pre>
+</section>
+
+<!-- ============================================================ -->
+<section id="advanced">
+<h2>SK.create()</h2>
+
+<p>In a monorepo or multi-service project, you often want shared configuration — the same health check logic, the same shutdown handler, the same logging. <code>SK.create()</code> lets you define that once and export a pre-configured instance for your services to build on.</p>
+
+<pre><code><span class="cm">// packages/shared/sk.ts</span>
+<span class="kw">import</span> SK <span class="kw">from</span> <span class="st">'@devvir/service-kit'</span>;
+
+<span class="kw">export default</span> SK.<span class="fn">create</span>({
+  spec: {
+    healthcheck: { port: <span class="nu">3002</span> },
+  },
+  bindings: {
+    onShutdown: (service, signal) => {
+      service.logger.<span class="fn">info</span>(<span class="st">`Shutdown signal: ${signal}`</span>);
+    },
+  },
+});</code></pre>
+
+<pre><code><span class="cm">// services/my-service/service.ts</span>
+<span class="kw">import</span> SK <span class="kw">from</span> <span class="st">'@shared/sk'</span>;
+
+<span class="kw">export default</span> SK
+  .<span class="fn">declare</span>({
+    name: <span class="st">'my-service'</span>,
+    providers: { mongodb: { url: process.env.MONGODB_URL } }
+  })
+  .<span class="fn">bind</span>({ onShutdown: cleanup });</code></pre>
+
+<pre><code><span class="cm">// services/my-service/index.ts</span>
+<span class="kw">import</span> SK <span class="kw">from</span> <span class="st">'./service'</span>;
+
+SK.<span class="fn">run</span>(<span class="kw">async</span> (service) => {
+  <span class="kw">const</span> db = <span class="kw">await</span> service.providers.<span class="fn">connect</span>(<span class="st">'mongodb'</span>);
+  <span class="cm">// ...</span>
+});</code></pre>
+
+<p>Each service gets its own instance from <code>SK.create()</code>, so <code>.declare()</code> and <code>.bind()</code> calls in one service don't affect others.</p>
+
+<p><code>SK.create()</code> accepts a config object with three optional keys: <code>spec</code>, <code>bindings</code>, and <code>plugins</code>.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="custom-plugins">
+<h2>Custom plugins</h2>
+
+<p>Plugins are how service-kit is extended. The built-in health check, state, shutdown, and provider features are all plugins — there is no separate internal API.</p>
+
+<p>A plugin is a plain object with a <code>name</code>, an optional <code>init</code> function that runs when the service starts, and an optional <code>extends</code> function that adds methods to the service object:</p>
+
+<pre><code><span class="kw">import</span> SK, { <span class="kw">type</span> <span class="ty">Plugin</span> } <span class="kw">from</span> <span class="st">'@devvir/service-kit'</span>;
+
+<span class="kw">const</span> metricsPlugin: <span class="ty">Plugin</span> = {
+  name: <span class="st">'Metrics'</span>,
+
+  <span class="fn">extends</span>(config) {
+    <span class="kw">const</span> counters: <span class="ty">Record</span>&lt;string, number&gt; = {};
+
+    <span class="kw">return</span> {
+      <span class="fn">count</span>: (key: string) => { counters[key] = (counters[key] || <span class="nu">0</span>) + <span class="nu">1</span>; },
+      <span class="fn">metrics</span>: () => ({ ...counters }),
+    };
+  },
+};
+
+<span class="kw">export default</span> SK.<span class="fn">use</span>(metricsPlugin);</code></pre>
+
+<p>After this, <code>service.count()</code> and <code>service.metrics()</code> are available in your service function and all handlers.</p>
+
+<p>Use <code>init</code> when you need to hook into the service lifecycle — register event listeners, start background processes, or do setup that depends on the assembled service:</p>
+
+<pre><code>{
+  name: <span class="st">'RequestTracker'</span>,
+
+  <span class="fn">init</span>(service) {
+    service.<span class="fn">on</span>(<span class="st">'shutdown'</span>, () => {
+      service.logger.<span class="fn">info</span>({ requests: service.<span class="fn">state</span>(<span class="st">'requests'</span>) }, <span class="st">'Final request count'</span>);
+    });
+  },
+}</code></pre>
+</section>
+
+<!-- ============================================================ -->
+<section id="api-sk">
+<h2>ServiceKit (SK)</h2>
+
+<p>The default export is a singleton <code>ServiceKit</code> instance. <code>.declare()</code>, <code>.bind()</code>, and <code>.use()</code> mutate the instance and return it for chaining. Only <code>.create()</code> returns a new separate instance.</p>
+
+<div class="sig">SK.declare(spec: Spec): this</div>
+<p>Merges the spec into the instance. Multiple calls accumulate — later values override earlier ones for the same key.</p>
+
+<div class="sig">SK.bind(bindings: Bindings): this</div>
+<p>Adds the bindings to the instance. Multiple calls accumulate — handlers are never replaced, only appended.</p>
+
+<div class="sig">SK.use(plugin: Plugin | Plugin[]): this</div>
+<p>Registers the plugin(s) on the instance.</p>
+
+<div class="sig">SK.create(config: { spec?, bindings?, plugins? }): ServiceKit</div>
+<p>Creates and returns a new <code>ServiceKit</code> instance with a preset configuration. Useful for common presets in a monorepo, or otherwise shared SK instances that best suit your needs. See <a href="#advanced">SK.create()</a>.</p>
+
+<div class="sig">SK.run(fn: (service: Service) => void | Promise&lt;void&gt;): void</div>
+<p>Starts the service. Initializes plugins, registers bindings, calls your function. Errors in <code>fn</code> trigger shutdown and exit with code 1.</p>
+
+<div class="sig">SK.defaults: { spec?, bindings?, plugins? }</div>
+<p>Getter and setter for the global defaults applied to every <code>SK</code> run. Mutates the singleton. Use <code>SK.create()</code> instead when you don't want global side effects.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="api-service">
+<h2>Service</h2>
+
+<p>The runtime object passed to your service function and all event handlers.</p>
+
+<h4>Config</h4>
+<div class="sig">service.config(): Record&lt;string, unknown&gt;<br>service.config(key: string): unknown</div>
+<p>Returns the full config object or a single value by key. Config is set via <code>declare({ config: {...} })</code> and is read-only at runtime.</p>
+
+<h4>State</h4>
+<div class="sig">service.state(): Record&lt;string, unknown&gt;<br>service.state(key: string): unknown<br>service.setState(key: string, value: unknown): void<br>service.increment(key: string): void<br>service.decrement(key: string): void</div>
+<p>Mutable runtime state. <code>increment</code> and <code>decrement</code> require the key to be numeric (or absent). See <a href="#state">State</a>.</p>
+
+<h4>Providers</h4>
+<div class="sig">service.providers.connect(name: string): Promise&lt;unknown&gt;<br>service.providers.connect(names: string[]): Promise&lt;unknown[]&gt;</div>
+<p>Establishes a connection to a declared provider and returns the client. Pass an array to connect multiple providers concurrently.</p>
+
+<h4>Shutdown</h4>
+<div class="sig">service.shutdown(signal?: string): Promise&lt;void&gt;</div>
+<p>Triggers the shutdown sequence programmatically. Awaits all <code>onShutdown</code> handlers, disconnects providers, awaits all <code>onShutdownComplete</code> handlers, then exits. Default signal: <code>'MANUAL'</code>.</p>
+
+<h4>Health</h4>
+<div class="sig">service.isHealthy(): boolean</div>
+<p>Returns the current healthy/unhealthy status. The Health plugin updates <code>state.healthy</code> automatically after each health check request — <code>true</code> if the response status was 2xx, <code>false</code> otherwise.</p>
+
+<h4>Events</h4>
+<div class="sig">service.on(event: string, handler: Function): this<br>service.once(event: string, handler: Function): this<br>service.off(event: string, handler: Function): this<br>service.emit(event: string, ...args: unknown[]): boolean<br>service.hasListeners(event: string): boolean</div>
+<p>Standard EventEmitter interface. All handlers receive <code>service</code> as their first argument automatically — you don't need to pass it yourself. Use <code>service.emit()</code> to fire any event — system, plugin, or custom. Listeners can be registered via bindings, <code>service.on()</code>, or inside plugins.</p>
+
+<h4>Providers</h4>
+<div class="sig">service.providers.connect(name: string): Promise&lt;unknown&gt;<br>service.providers.connect(names: string[]): Promise&lt;unknown[]&gt;</div>
+<p>Lazily connects a configured provider and returns the connection. Call inside <code>.run()</code> when the connection is needed. Returns the underlying client (e.g. <code>MongoClient</code>, <code>Broker</code>).</p>
+
+<h4>Logging</h4>
+<div class="sig">service.logger: pino.Logger</div>
+<p>Structured logger scoped to the service. Use it anywhere you have access to the service.</p>
+
+<h4>Introspection</h4>
+<div class="sig">service.spec(): Spec<br>service.bindings(): Bindings<br>service.plugins(): string[]<br>service.config(key?: string): unknown<br>service.state(key?: string): unknown</div>
+<p>Read-only views into the service's current configuration and runtime state. <code>config()</code> returns the full config object or a single key. <code>state()</code> returns the full state snapshot or a single key.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="api-spec">
+<h2>Spec</h2>
+
+<table>
+  <tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr>
+  <tr><td><code>name</code></td><td>string</td><td><code>'service'</code></td><td>Service name. Used in log output.</td></tr>
+  <tr><td><code>config</code></td><td>Record&lt;string, unknown&gt;</td><td><code>{}</code></td><td>App config. Access via <code>service.config()</code>.</td></tr>
+  <tr><td><code>state</code></td><td>Record&lt;string, unknown&gt;</td><td><code>{}</code></td><td>Initial mutable state. Access via <code>service.state()</code>.</td></tr>
+  <tr><td><code>healthcheck</code></td><td>boolean | number | { port?, message? }</td><td><code>true</code></td><td><code>true</code>: port 3000. <code>false</code>: disabled. Number: port. Object: full config.</td></tr>
+  <tr><td><code>providers</code></td><td>Record&lt;string, ProviderSpec&gt;</td><td><code>{}</code></td><td>Provider configurations. See <a href="#providers">Providers</a>.</td></tr>
+</table>
+
+<h4>ProviderSpec</h4>
+<table>
+  <tr><th>Field</th><th>Description</th></tr>
+  <tr><td><code>url</code></td><td>Connection URL (required).</td></tr>
+  <tr><td><code>provider</code></td><td>Provider type. Defaults to the spec key name (<code>'mongodb'</code>, <code>'rabbitmq'</code>, <code>'redis'</code>).</td></tr>
+  <tr><td><code>retry</code></td><td>Retry config: <code>{ strategy: 'linear' | 'exponential', delay, maxDelay?, attempts? }</code>.</td></tr>
+</table>
+
+<p>Provider-specific fields (e.g., <code>useBroker</code>, <code>topology</code> for RabbitMQ) are also accepted — the provider handler reads them from the spec object.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="api-bindings">
+<h2>Bindings</h2>
+
+<p>Bindings are event handlers registered via <code>.bind()</code>. Keys follow the <code>on&lt;EventName&gt;</code> pattern. All handlers receive <code>service</code> as their first argument, followed by event-specific data.</p>
+
+<table>
+  <tr><th>Key</th><th>Additional arguments</th><th>When</th></tr>
+  <tr><td><code>onShutdown</code></td><td><code>signal: string</code></td><td>SIGTERM, SIGINT, or <code>service.shutdown()</code>.</td></tr>
+  <tr><td><code>onShutdownComplete</code></td><td><code>signal: string</code></td><td>After providers disconnect and health server closes.</td></tr>
+  <tr><td><code>onHealthCheck</code></td><td><code>res: ServerResponse</code></td><td>Each inbound health check request. Write the response to <code>res</code>.</td></tr>
+  <tr><td><code>onProviderConnected</code></td><td><code>type: ProviderType, name: string</code></td><td>After <code>service.providers.connect()</code> succeeds.</td></tr>
+  <tr><td><code>onProviderDisconnected</code></td><td><code>type: ProviderType, name: string</code></td><td>After a provider connection drops.</td></tr>
+</table>
+
+<p>Custom events are also supported. If your binding key is <code>onMessage</code>, you fire it with <code>service.emit('message')</code>:</p>
+
+<pre><code>SK.<span class="fn">bind</span>({
+  onMessage: (service) => {
+    service.<span class="fn">increment</span>(<span class="st">'messageCount'</span>);
+  },
+});
+
+<span class="cm">// Later, inside run():</span>
+service.<span class="fn">emit</span>(<span class="st">'message'</span>);</code></pre>
+</section>
+
+<!-- ============================================================ -->
+<section id="api-events">
+<h2>Events</h2>
+
+<table>
+  <tr><th>Event string</th><th>Binding key</th><th>When</th></tr>
+  <tr><td><code>'shutdown'</code></td><td><code>onShutdown</code></td><td>SIGTERM, SIGINT, or <code>service.shutdown()</code>.</td></tr>
+  <tr><td><code>'shutdownComplete'</code></td><td><code>onShutdownComplete</code></td><td>After shutdown sequence completes.</td></tr>
+  <tr><td><code>'healthCheck'</code></td><td><code>onHealthCheck</code></td><td>Each GET /health request.</td></tr>
+  <tr><td><code>'providerConnected'</code></td><td><code>onProviderConnected</code></td><td>After <code>connect()</code> resolves.</td></tr>
+  <tr><td><code>'providerDisconnected'</code></td><td><code>onProviderDisconnected</code></td><td>After a provider drops.</td></tr>
+  <tr><td>custom</td><td><code>on&lt;Name&gt;</code></td><td><code>service.emit('name')</code> — any string that follows the <code>onEventName</code> → <code>'eventName'</code> convention.</td></tr>
+</table>
+</section>
+
+<!-- ============================================================ -->
+<section id="ex-consumer">
+<h2>Example: message consumer</h2>
+
+<p>A RabbitMQ worker that processes jobs and drains gracefully on shutdown.</p>
+
+<pre><code><span class="kw">import</span> SK <span class="kw">from</span> <span class="st">'@devvir/service-kit'</span>;
+<span class="kw">import</span> <span class="kw">type</span> { <span class="ty">Broker</span> } <span class="kw">from</span> <span class="st">'@devvir/rabbitmq'</span>;
+
+<span class="kw">let</span> active = <span class="nu">0</span>;
+<span class="kw">let</span> accepting = <span class="kw">true</span>;
+
+<span class="kw">const</span> worker = SK
+  .<span class="fn">declare</span>({
+    name:      <span class="st">'job-worker'</span>,
+    state:     { processed: <span class="nu">0</span> },
+    providers: { rabbitmq: { url: process.env.RABBITMQ_URL, useBroker: <span class="kw">true</span> } },
+  })
+  .<span class="fn">bind</span>({
+    onShutdown: <span class="kw">async</span> (service, signal) => {
+      accepting = <span class="kw">false</span>;
+      service.logger.<span class="fn">info</span>(<span class="st">`Draining ${active} in-flight jobs...`</span>);
+      <span class="kw">const</span> deadline = Date.<span class="fn">now</span>() + <span class="nu">30_000</span>;
+      <span class="kw">while</span> (active > <span class="nu">0</span> && Date.<span class="fn">now</span>() < deadline) {
+        <span class="kw">await new</span> <span class="ty">Promise</span>((r) => <span class="fn">setTimeout</span>(r, <span class="nu">200</span>));
+      }
+    },
+  });
+
+worker.<span class="fn">run</span>(<span class="kw">async</span> (service) => {
+  <span class="kw">const</span> broker = <span class="kw">await</span> service.providers.<span class="fn">connect</span>(<span class="st">'rabbitmq'</span>) <span class="kw">as</span> <span class="ty">Broker</span>;
+  <span class="kw">const</span> queue  = broker.<span class="fn">getQueue</span>(<span class="st">'jobs'</span>)!;
+
+  <span class="kw">await</span> queue.<span class="fn">consume</span>(<span class="kw">async</span> (message, delivery) => {
+    <span class="kw">if</span> (! accepting) { delivery.<span class="fn">nack</span>(); <span class="kw">return</span>; }
+
+    active++;
+    <span class="kw">try</span> {
+      <span class="kw">await</span> <span class="fn">processJob</span>(message);
+      service.<span class="fn">increment</span>(<span class="st">'processed'</span>);
+      delivery.<span class="fn">ack</span>();
+    } <span class="kw">catch</span> {
+      delivery.<span class="fn">nack</span>();
+    } <span class="kw">finally</span> {
+      active--;
+    }
+  }, { prefetch: <span class="nu">10</span> });
+});</code></pre>
+</section>
+
+<!-- ============================================================ -->
+<section id="ex-api">
+<h2>Example: API server</h2>
+
+<p>An Express API with a MongoDB connection and graceful HTTP server shutdown.</p>
+
+<pre><code><span class="kw">import</span> SK <span class="kw">from</span> <span class="st">'@devvir/service-kit'</span>;
+<span class="kw">import</span> <span class="kw">type</span> { <span class="ty">MongoClient</span> } <span class="kw">from</span> <span class="st">'mongodb'</span>;
+<span class="kw">import</span> express <span class="kw">from</span> <span class="st">'express'</span>;
+
+<span class="kw">const</span> api = SK
+  .<span class="fn">declare</span>({
+    name:      <span class="st">'user-api'</span>,
+    config:    { port: <span class="fn">parseInt</span>(process.env.PORT || <span class="st">'3001'</span>) },
+    providers: { mongodb: { url: process.env.MONGODB_URL } },
+  });
+
+api.<span class="fn">run</span>(<span class="kw">async</span> (service) => {
+  <span class="kw">const</span> client = <span class="kw">await</span> service.providers.<span class="fn">connect</span>(<span class="st">'mongodb'</span>) <span class="kw">as</span> <span class="ty">MongoClient</span>;
+  <span class="kw">const</span> db     = client.<span class="fn">db</span>(<span class="st">'myapp'</span>);
+  <span class="kw">const</span> port   = service.<span class="fn">config</span>(<span class="st">'port'</span>) <span class="kw">as</span> number;
+  <span class="kw">const</span> app    = <span class="fn">express</span>();
+
+  app.<span class="fn">use</span>(express.<span class="fn">json</span>());
+
+  app.<span class="fn">get</span>(<span class="st">'/users/:id'</span>, <span class="kw">async</span> (req, res) => {
+    <span class="kw">const</span> user = <span class="kw">await</span> db.<span class="fn">collection</span>(<span class="st">'users'</span>).<span class="fn">findOne</span>({ _id: req.params.id });
+    res.<span class="fn">json</span>(user ?? { error: <span class="st">'not found'</span> });
+  });
+
+  <span class="kw">const</span> server = app.<span class="fn">listen</span>(port, () => service.logger.<span class="fn">info</span>(<span class="st">`API on port ${port}`</span>));
+
+  service.<span class="fn">on</span>(<span class="st">'shutdown'</span>, () => {
+    server.<span class="fn">close</span>();
+  });
+});</code></pre>
+</section>
+
+<!-- ============================================================ -->
+<section id="ex-batch">
+<h2>Example: batch job</h2>
+
+<p>A one-shot script that connects, does its work, and exits. Disable the health check so Node exits naturally when the service function returns:</p>
+
+<pre><code><span class="kw">import</span> SK <span class="kw">from</span> <span class="st">'@devvir/service-kit'</span>;
+<span class="kw">import</span> <span class="kw">type</span> { <span class="ty">MongoClient</span> } <span class="kw">from</span> <span class="st">'mongodb'</span>;
+
+<span class="kw">const</span> job = SK.<span class="fn">declare</span>({
+  name:        <span class="st">'data-import'</span>,
+  healthcheck: <span class="kw">false</span>,
+  providers:   { mongodb: { url: process.env.MONGODB_URL } },
+});
+
+job.<span class="fn">run</span>(<span class="kw">async</span> (service) => {
+  <span class="kw">const</span> client  = <span class="kw">await</span> service.providers.<span class="fn">connect</span>(<span class="st">'mongodb'</span>) <span class="kw">as</span> <span class="ty">MongoClient</span>;
+  <span class="kw">const</span> db      = client.<span class="fn">db</span>(<span class="st">'myapp'</span>);
+  <span class="kw">const</span> records = <span class="kw">await</span> <span class="fn">fetchExternalData</span>();
+  <span class="kw">await</span> db.<span class="fn">collection</span>(<span class="st">'imports'</span>).<span class="fn">insertMany</span>(records);
+  service.logger.<span class="fn">info</span>(<span class="st">`Imported ${records.length} records`</span>);
+  <span class="cm">// function returns → provider disconnects → process exits</span>
+});</code></pre>
+</section>
+
+<!-- ============================================================ -->
+<section id="ex-preset">
+<h2>Example: project preset</h2>
+
+<p>A shared base instance for a monorepo. Each service adds its own config and providers on top.</p>
+
+<pre><code><span class="cm">// packages/shared/sk.ts</span>
+<span class="kw">import</span> SK <span class="kw">from</span> <span class="st">'@devvir/service-kit'</span>;
+
+<span class="kw">export default</span> SK.<span class="fn">create</span>({
+  bindings: {
+    onShutdown: (service, signal) => {
+      service.logger.<span class="fn">info</span>(<span class="st">`[${service.spec().name}] shutdown (${signal})`</span>);
+    },
+    onHealthCheck: (service, res) => {
+      res.<span class="fn">writeHead</span>(<span class="nu">200</span>, { <span class="st">'Content-Type'</span>: <span class="st">'application/json'</span> });
+      res.<span class="fn">end</span>(<span class="ty">JSON</span>.<span class="fn">stringify</span>({ status: <span class="st">'ok'</span>, uptime: process.<span class="fn">uptime</span>() }));
+    },
+  },
+});</code></pre>
+
+<pre><code><span class="cm">// services/order-processor/service.ts</span>
+<span class="kw">import</span> SK <span class="kw">from</span> <span class="st">'@shared/sk'</span>;
+
+<span class="kw">export default</span> SK.<span class="fn">declare</span>({
+  name:      <span class="st">'order-processor'</span>,
+  providers: { rabbitmq: { url: process.env.RABBITMQ_URL, useBroker: <span class="kw">true</span> } },
+});</code></pre>
+
+<pre><code><span class="cm">// services/order-processor/index.ts</span>
+<span class="kw">import</span> SK <span class="kw">from</span> <span class="st">'./service'</span>;
+<span class="kw">import</span> <span class="kw">type</span> { <span class="ty">Broker</span> } <span class="kw">from</span> <span class="st">'@devvir/rabbitmq'</span>;
+
+SK.<span class="fn">run</span>(<span class="kw">async</span> (service) => {
+  <span class="kw">const</span> broker = <span class="kw">await</span> service.providers.<span class="fn">connect</span>(<span class="st">'rabbitmq'</span>) <span class="kw">as</span> <span class="ty">Broker</span>;
+  <span class="kw">const</span> queue  = broker.<span class="fn">getQueue</span>(<span class="st">'orders'</span>)!;
+
+  <span class="kw">await</span> queue.<span class="fn">consume</span>(<span class="kw">async</span> (order, delivery) => {
+    <span class="kw">await</span> <span class="fn">processOrder</span>(order);
+    delivery.<span class="fn">ack</span>();
+  });
+});</code></pre>
+</section>
+
+</main>
+
+<script>
+  const sections = document.querySelectorAll('section[id]');
+  const links = document.querySelectorAll('nav a[href^="#"]');
+  const observer = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          links.forEach(l => l.classList.remove('active'));
+          const active = document.querySelector(`nav a[href="#${entry.target.id}"]`);
+          if (active) active.classList.add('active');
+        }
+      }
+    },
+    { rootMargin: '-20% 0px -75% 0px' }
+  );
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
