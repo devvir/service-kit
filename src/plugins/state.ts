@@ -40,7 +40,7 @@ const ensureKeyIsNumeric = (state: State, key: JsonKey): void => {
 declare module '..' {
   interface Service {
     state(key?: JsonKey): unknown | Record<JsonKey, unknown>;
-    setState(key: JsonKey, value: unknown): void;
+    setState<T extends unknown>(key: JsonKey, value: T): T;
     increment(key: JsonKey): void;
     decrement(key: JsonKey): void;
   }
