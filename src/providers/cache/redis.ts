@@ -12,7 +12,7 @@ registerProvider('redis', 'cache', {
   },
 
   async connect(spec: ProviderSpec): Promise<Connection> {
-    const client = createClient({ url: spec.url });
+    const client = createClient({ url: spec.url, password: spec.password as string | undefined });
     await client.connect();
 
     return client as Connection;
@@ -25,7 +25,7 @@ registerProvider('redis', 'cache', {
   async reconnect(spec: ProviderSpec, connection: Connection): Promise<Connection> {
     await (connection as RedisClient).disconnect().catch(() => {});
 
-    const client = createClient({ url: spec.url });
+    const client = createClient({ url: spec.url, password: spec.password as string | undefined });
     await client.connect();
 
     return client as Connection;
