@@ -9,3 +9,6 @@ export * as plugins from './plugins';
 export * from './providers';
 
 export * as RabbitMQ from '@devvir/rabbitmq';
+
+export * as registry from './core/registry';
+export { SK_CONFIG, SK_STATE, SK_PROVIDERS } from './core/registry';

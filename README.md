@@ -67,6 +67,28 @@ SK.run(async (service: Service) => {
 });
 ```
 
+---
+
+Access any running service — or just its config, state, or providers — from anywhere in the process without prop drilling:
+
+```ts
+import { registry, SK_CONFIG, SK_STATE, SK_PROVIDERS } from '@devvir/service-kit';
+
+// From a module that has no reference to the service object:
+const svc       = registry.get('worker');
+const config    = registry.get('worker', SK_CONFIG);    // → service.config()
+const state     = registry.get('worker', SK_STATE);     // → service.state()
+const providers = registry.get('worker', SK_PROVIDERS); // → service.providers
+```
+
+`SK.run()` registers the service automatically when the spec includes a `name`. Registration fails fast if two services with the same name are started in one process — early detection for misconfiguration.
+
+```ts
+// In tests — swap out the real service with a controlled mock:
+import { registry } from '@devvir/service-kit';
+beforeEach(() => registry.clear());
+```
+
 ## Documentation
 
 [Full documentation →](https://devvir.github.io/service-kit/)

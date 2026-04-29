@@ -109,6 +109,7 @@
     <li><a href="#redis">Redis</a></li>
     <li class="section-label">Advanced</li>
     <li><a href="#advanced">SK.create()</a></li>
+    <li><a href="#registry">Service registry</a></li>
     <li><a href="#custom-plugins">Custom plugins</a></li>
     <li class="section-label">API Reference</li>
     <li><a href="#api-sk">ServiceKit (SK)</a></li>
@@ -544,6 +545,90 @@ SK.<span class="fn">run</span>(<span class="kw">async</span> (service) => {
 <p>Each service gets its own instance from <code>SK.create()</code>, so <code>.declare()</code> and <code>.bind()</code> calls in one service don't affect others.</p>
 
 <p><code>SK.create()</code> accepts a config object with three optional keys: <code>spec</code>, <code>bindings</code>, and <code>plugins</code>.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="registry">
+<h2>Service registry</h2>
+
+<p>The registry is a process-wide store of named service instances. <code>SK.run()</code> registers the service automatically when the spec has a <code>name</code>. Any module in the same process can then look it up — no prop drilling, no manual wiring.</p>
+
+<pre><code><span class="kw">import</span> { registry, <span class="ty">SK_CONFIG</span>, <span class="ty">SK_STATE</span>, <span class="ty">SK_PROVIDERS</span> } <span class="kw">from</span> <span class="st">'@devvir/service-kit'</span>;
+
+<span class="cm">// Get the service itself</span>
+<span class="kw">const</span> svc = registry.<span class="fn">get</span>(<span class="st">'worker'</span>);
+
+<span class="cm">// Or ask for a specific member directly</span>
+<span class="kw">const</span> config    = registry.<span class="fn">get</span>(<span class="st">'worker'</span>, <span class="ty">SK_CONFIG</span>);    <span class="cm">// → service.config()</span>
+<span class="kw">const</span> state     = registry.<span class="fn">get</span>(<span class="st">'worker'</span>, <span class="ty">SK_STATE</span>);     <span class="cm">// → service.state()</span>
+<span class="kw">const</span> providers = registry.<span class="fn">get</span>(<span class="st">'worker'</span>, <span class="ty">SK_PROVIDERS</span>); <span class="cm">// → service.providers</span></code></pre>
+
+<p><code>SK_CONFIG</code>, <code>SK_STATE</code>, and <code>SK_PROVIDERS</code> are <code>Symbol</code>s — not strings — so callers must import them from service-kit rather than conjuring their own key.</p>
+
+<h3>Avoiding prop drilling</h3>
+
+<p>Without the registry, a module deep in your call tree must receive the service (or its providers) as an argument from the top:</p>
+
+<pre><code><span class="cm">// Without registry — provider travels as a parameter through every layer</span>
+<span class="kw">async function</span> <span class="fn">startConsumer</span>(service: <span class="ty">Service</span>) {
+  <span class="kw">const</span> broker = <span class="kw">await</span> service.providers.<span class="fn">connect</span>(<span class="st">'rabbitmq'</span>);
+  <span class="kw">await</span> <span class="fn">consume</span>(broker);
+}
+
+<span class="kw">async function</span> <span class="fn">consume</span>(broker: <span class="ty">Broker</span>) {
+  <span class="kw">const</span> queue = broker.<span class="fn">getQueue</span>(<span class="st">'jobs'</span>)!;
+  <span class="kw">await</span> queue.<span class="fn">consume</span>(<span class="kw">async</span> (msg, delivery) => {
+    <span class="kw">await</span> <span class="fn">handleJob</span>(msg, broker); <span class="cm">// propagates further</span>
+    delivery.<span class="fn">ack</span>();
+  });
+}</code></pre>
+
+<pre><code><span class="cm">// With registry — any module reaches the provider directly</span>
+<span class="kw">import</span> { registry, <span class="ty">SK_PROVIDERS</span> } <span class="kw">from</span> <span class="st">'@devvir/service-kit'</span>;
+<span class="kw">import</span> <span class="kw">type</span> { <span class="ty">Broker</span> } <span class="kw">from</span> <span class="st">'@devvir/rabbitmq'</span>;
+
+<span class="kw">async function</span> <span class="fn">startConsumer</span>() {
+  <span class="kw">const</span> providers = registry.<span class="fn">get</span>(<span class="st">'worker'</span>, <span class="ty">SK_PROVIDERS</span>);
+  <span class="kw">const</span> broker    = providers.<span class="fn">get</span>(<span class="st">'rabbitmq'</span>) <span class="kw">as</span> <span class="ty">Broker</span>;
+
+  <span class="kw">const</span> queue = broker.<span class="fn">getQueue</span>(<span class="st">'jobs'</span>)!;
+  <span class="kw">await</span> queue.<span class="fn">consume</span>(<span class="kw">async</span> (msg, delivery) => {
+    <span class="kw">await</span> <span class="fn">handleJob</span>(msg);
+    delivery.<span class="fn">ack</span>();
+  });
+}</code></pre>
+
+<h3>Misconfiguration guard</h3>
+
+<p>Registering two services with the same name in one process is always a misconfiguration. The registry throws immediately rather than silently overwriting the first service:</p>
+
+<pre><code><span class="cm">// Both specs say name: 'processor' → error on second SK.run()</span>
+<span class="cm">// [registry] Service "processor" is already registered —</span>
+<span class="cm">// duplicate name in one process is a misconfiguration</span></code></pre>
+
+<h3>Testing</h3>
+
+<p>In tests, register a mock service and call <code>registry.clear()</code> between test cases so each test starts with a clean slate:</p>
+
+<pre><code><span class="kw">import</span> { registry, <span class="ty">SK_CONFIG</span> } <span class="kw">from</span> <span class="st">'@devvir/service-kit'</span>;
+<span class="kw">import</span> Service <span class="kw">from</span> <span class="st">'@devvir/service-kit/core/service'</span>;
+
+<span class="fn">beforeEach</span>(() => registry.<span class="fn">clear</span>());
+
+<span class="fn">it</span>(<span class="st">'reads config from registry'</span>, () => {
+  <span class="kw">const</span> svc = <span class="kw">new</span> <span class="ty">Service</span>({
+    spec:     { name: <span class="st">'teller'</span>, config: { port: <span class="nu">4000</span> } },
+    bindings: {},
+    plugins:  [],
+  });
+
+  registry.<span class="fn">add</span>(svc);
+
+  <span class="kw">const</span> cfg = registry.<span class="fn">get</span>(<span class="st">'teller'</span>, <span class="ty">SK_CONFIG</span>);
+  <span class="fn">expect</span>(cfg.port).<span class="fn">toBe</span>(<span class="nu">4000</span>);
+});</code></pre>
+
+<p>Production code that calls <code>registry.get('teller', SK_PROVIDERS)</code> will receive the mock's providers transparently — no injection, no argument threading.</p>
 </section>
 
 <!-- ============================================================ -->

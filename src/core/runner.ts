@@ -4,6 +4,7 @@ import { JsonKey } from '../types/shared';
 import Service from './service';
 import { logger } from '..';
 import { registerLogging } from './logging.js';
+import { add as registryAdd } from './registry';
 
 export default async function runner(serviceFn: ServiceFn, context: Context): Promise<void> {
   const config: Config = {
@@ -23,6 +24,10 @@ export default async function runner(serviceFn: ServiceFn, context: Context): Pr
 
   logger.debug({ plugins: config.plugins.map(p => p.name) }, '[service-kit] initializing plugins');
   initializePlugins(config.plugins, service);
+
+  if (config.spec.name)
+    registryAdd(service);
+
   service.emit('created');
 
   logger.debug('[service-kit] registering bindings');
