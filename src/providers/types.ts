@@ -1,14 +1,9 @@
 import { Broker, MongoClient, RabbitMQClient, RedisClient } from ".";
+import type { RetryConfig } from '../support/retry';
 
-export type ProviderType    = 'database' | 'queue' | 'cache';
-export type RetryStrategy   = 'linear' | 'exponential';
+export type ProviderType = 'database' | 'queue' | 'cache';
 
-export interface RetryConfig {
-  strategy:  RetryStrategy;
-  delay:     number;
-  maxDelay?: number;
-  attempts?: number;
-}
+export type { RetryConfig, RetryStrategy } from '../support/retry';
 
 export interface ProviderSpec {
   provider?: string;

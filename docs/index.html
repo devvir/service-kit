@@ -102,6 +102,12 @@
     <li><a href="#healthchecks">Health checks</a></li>
     <li><a href="#shutdown">Graceful shutdown</a></li>
     <li><a href="#state">State</a></li>
+    <li class="section-label">Servers &amp; Clients</li>
+    <li><a href="#net">Overview</a></li>
+    <li><a href="#express-server">Express server</a></li>
+    <li><a href="#ws-server">WebSocket server</a></li>
+    <li><a href="#fetch-client">Fetch client</a></li>
+    <li><a href="#ws-client">WebSocket client</a></li>
     <li class="section-label">Providers</li>
     <li><a href="#providers">Connecting providers</a></li>
     <li><a href="#mongodb">MongoDB</a></li>
@@ -115,6 +121,7 @@
     <li><a href="#api-sk">ServiceKit (SK)</a></li>
     <li><a href="#api-service">Service</a></li>
     <li><a href="#api-spec">Spec</a></li>
+    <li><a href="#api-net">Servers &amp; Clients</a></li>
     <li><a href="#api-bindings">Bindings</a></li>
     <li><a href="#api-events">Events</a></li>
     <li class="section-label">Examples</li>
@@ -225,7 +232,7 @@ service.<span class="fn">emit</span>(<span class="st">'batchComplete'</span>, co
 <section id="plugins">
 <h2>Plugins</h2>
 
-<p>Service-kit is built around plugins. Four plugins are active by default — you get all of them without any configuration:</p>
+<p>Service-kit is built around plugins. Five plugins are active by default — you get all of them without any configuration:</p>
 
 <table>
   <tr><th>Plugin</th><th>What it provides</th></tr>
@@ -233,6 +240,7 @@ service.<span class="fn">emit</span>(<span class="st">'batchComplete'</span>, co
   <tr><td><strong>Shutdown</strong></td><td>Listens for SIGTERM and SIGINT. Fires <code>onShutdown</code> handlers, then disconnects providers. Adds <code>service.shutdown()</code> for programmatic shutdown.</td></tr>
   <tr><td><strong>State</strong></td><td>A mutable key/value store on the service. Useful for counters, flags, and values shared between handlers. Adds <code>service.state()</code>, <code>service.setState()</code>, <code>service.increment()</code>, and <code>service.decrement()</code>.</td></tr>
   <tr><td><strong>Providers</strong></td><td>Manages external connections (databases, queues, caches). Adds <code>service.providers.connect()</code>.</td></tr>
+  <tr><td><strong>Net</strong></td><td>HTTP and WebSocket servers and outbound clients. Adds <code>service.servers</code> and <code>service.clients</code>.</td></tr>
 </table>
 
 <p>Each of these is covered in detail in the sections below. You can also write your own plugins — see <a href="#custom-plugins">Custom plugins</a>.</p>
@@ -370,6 +378,398 @@ SK.<span class="fn">run</span>(<span class="kw">async</span> (service) => {
 });</code></pre>
 
 <p class="note"><strong>Note:</strong> <code>increment</code> and <code>decrement</code> require the key to hold a number (or be unset). Calling them on a non-numeric key throws.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="net">
+<h2>Servers &amp; clients</h2>
+
+<p>The <strong>Net</strong> plugin does for network endpoints what the providers plugin does for databases: you <em>declare</em> a server or client in the spec, and the kit hands back a ready-made handle — routing, retries, reconnection, timeouts, and clean logs already wired.</p>
+
+<p>It adds two APIs to the service:</p>
+<ul class="bullets">
+  <li><code>service.servers</code> — inbound: the HTTP and WebSocket servers your service exposes.</li>
+  <li><code>service.clients</code> — outbound: the HTTP and WebSocket connections your service makes.</li>
+</ul>
+
+<p>The smallest case — one HTTP server:</p>
+
+<pre><code><span class="kw">import</span> SK, { <span class="kw">type</span> <span class="ty">ExpressServerHandle</span> } <span class="kw">from</span> <span class="st">'@devvir/service-kit'</span>;
+
+SK.<span class="fn">declare</span>({ servers: { type: <span class="st">'express'</span> } });
+
+SK.<span class="fn">run</span>(<span class="kw">async</span> (service) => {
+  <span class="kw">const</span> api = service.servers.<span class="fn">get</span>() <span class="kw">as</span> <span class="ty">ExpressServerHandle</span>;
+
+  api.<span class="fn">addRoute</span>(<span class="st">'get'</span>, <span class="st">'/hello'</span>, (_req, res) => res.<span class="fn">json</span>({ hi: <span class="kw">true</span> }));
+
+  <span class="kw">await</span> api.<span class="fn">start</span>();
+});</code></pre>
+
+<p>That is already a production HTTP server — JSON body parsing, request logging, a <code>/ping</code> route, a complete error handler, and graceful shutdown are all on. You added one route and called <code>start()</code>.</p>
+
+<h3>The spec model</h3>
+
+<p>Every server and client is a spec object — <code>{ name, type, ...config }</code>. <code>type</code> picks the kind; <code>name</code> defaults to the type. Pass one object, or an array:</p>
+
+<pre><code>SK.<span class="fn">declare</span>({
+  servers: { name: <span class="st">'api'</span>, type: <span class="st">'express'</span>, port: <span class="nu">8000</span> },
+
+  clients: [
+    { name: <span class="st">'vault'</span>, type: <span class="st">'fetch'</span>, url: <span class="st">'http://vault'</span> },
+    { name: <span class="st">'feed'</span>,  type: <span class="st">'ws'</span>,    url: <span class="st">'wss://stream.example.com'</span> },
+  ],
+});</code></pre>
+
+<table>
+  <tr><th>API</th><th><code>type</code></th><th>What it is</th></tr>
+  <tr><td><code>servers</code></td><td><code>express</code></td><td>HTTP server — routes, middleware, error handling.</td></tr>
+  <tr><td><code>servers</code></td><td><code>ws</code></td><td>WebSocket server — connections, commands, broadcast.</td></tr>
+  <tr><td><code>clients</code></td><td><code>fetch</code></td><td>HTTP client — retries, timeouts, status policy.</td></tr>
+  <tr><td><code>clients</code></td><td><code>ws</code></td><td>WebSocket client — reconnection, heartbeat.</td></tr>
+</table>
+
+<p>For a client, <code>type</code> can be omitted — it is inferred from the URL scheme (<code>http(s)://</code> → <code>fetch</code>, <code>ws(s)://</code> → <code>ws</code>). An explicit <code>type</code> always wins, and is required when the <code>url</code> is a factory function.</p>
+
+<h3>Reaching a handle</h3>
+
+<p>Inside <code>.run()</code>, reach a declared server or client through the matching API:</p>
+
+<pre><code>service.servers.<span class="fn">get</span>(<span class="st">'api'</span>)      <span class="cm">// a declared server, by name</span>
+service.servers.<span class="fn">get</span>()           <span class="cm">// the sole server — throws if there are several</span>
+service.clients.<span class="fn">get</span>(<span class="st">'vault'</span>)    <span class="cm">// a declared client</span>
+service.clients.<span class="fn">has</span>(<span class="st">'vault'</span>)    <span class="cm">// → boolean</span>
+service.clients.<span class="fn">all</span>()           <span class="cm">// → every live client handle</span></code></pre>
+
+<p>You can also create one at runtime with no spec entry — <code>service.servers.create('express')</code>, <code>service.clients.create({ type: 'fetch', url })</code>. Spec-declared and runtime-created handles are identical; the spec is simply where stable config belongs.</p>
+
+<p class="note"><strong>Bringing things up.</strong> A server or stateful client is registered immediately, but binds no port and dials no connection until you call <code>start()</code>. Teardown is automatic — every handle is stopped on service shutdown.</p>
+
+<h3>Templates &amp; pools</h3>
+
+<p>A spec entry marked <code>template: true</code> is registered but <em>not</em> started — it records a reusable shape. Mint instances from it with <code>clone()</code>, supplying whatever the template left out:</p>
+
+<pre><code>SK.<span class="fn">declare</span>({
+  clients: { name: <span class="st">'bitmex'</span>, template: <span class="kw">true</span>, type: <span class="st">'ws'</span>, heartbeat: <span class="nu">30_000</span> },
+});
+
+SK.<span class="fn">run</span>(<span class="kw">async</span> (service) => {
+  <span class="cm">// one connection per account, all sharing the template's config</span>
+  <span class="kw">const</span> open = (acct) =>
+    service.clients
+      .<span class="fn">clone</span>(<span class="st">'bitmex'</span>, { name: <span class="st">`bitmex:${acct.id}`</span>, url: () => <span class="fn">sign</span>(acct) })
+      .<span class="fn">start</span>();
+});</code></pre>
+
+<p>This keeps the static config of a pooled client in one place, alongside every other spec entry, instead of scattered through the service as inline objects.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="express-server">
+<h2>Express server</h2>
+
+<p>The <code>express</code> server kind is an HTTP server with the recurring boilerplate already wired. Declare it, add routes, start it:</p>
+
+<pre><code><span class="kw">import</span> SK, { <span class="kw">type</span> <span class="ty">ExpressServerHandle</span> } <span class="kw">from</span> <span class="st">'@devvir/service-kit'</span>;
+
+SK.<span class="fn">declare</span>({ servers: { type: <span class="st">'express'</span> } });
+
+SK.<span class="fn">run</span>(<span class="kw">async</span> (service) => {
+  <span class="kw">const</span> api = service.servers.<span class="fn">get</span>() <span class="kw">as</span> <span class="ty">ExpressServerHandle</span>;
+
+  api.<span class="fn">addRoute</span>(<span class="st">'get'</span>, <span class="st">'/users/:id'</span>, (req, res) => {
+    res.<span class="fn">json</span>({ id: req.params.id });
+  });
+
+  <span class="kw">await</span> api.<span class="fn">start</span>();
+});</code></pre>
+
+<p>Routes can be registered the moment the handle exists; <code>start()</code> binds the port and begins accepting. The handle wraps a real Express app — <code>api.app</code> is always there for anything the handle does not surface.</p>
+
+<h3>On by default</h3>
+
+<p>Every express server starts with these already wired:</p>
+<ul class="bullets">
+  <li><strong>JSON body parsing</strong> — <code>req.body</code> is parsed and ready.</li>
+  <li><strong>Request logging</strong> — each request logged at debug through <code>service.logger</code>.</li>
+  <li><strong>A <code>/ping</code> route</strong> — answers <code>200</code>, for liveness probes.</li>
+  <li><strong>The error handler</strong> — one complete handler (below), appended at <code>start()</code>.</li>
+  <li><strong>Graceful shutdown</strong> — the server drains and closes when the service shuts down.</li>
+  <li><strong>Fail-fast binding</strong> — a port already in use rejects <code>start()</code> rather than failing quietly.</li>
+</ul>
+
+<h3>Routes and middleware</h3>
+
+<p>Routes and middleware register on the handle, and they are <em>cumulative</em> — many modules can contribute to one server:</p>
+
+<pre><code><span class="cm">// a single route</span>
+api.<span class="fn">addRoute</span>(<span class="st">'post'</span>, <span class="st">'/orders'</span>, createOrder);
+
+<span class="cm">// an Express Router, an (app) =&gt; void builder, or an array of either</span>
+api.<span class="fn">addRoutes</span>(<span class="fn">buildOrderRoutes</span>());
+api.<span class="fn">addRoutes</span>([adminRouter, metricsRouter]);
+
+<span class="cm">// plain middleware, and a router mounted under a prefix</span>
+api.<span class="fn">use</span>(cors);
+api.<span class="fn">mount</span>(<span class="st">'/api/v1'</span>, v1Router);</code></pre>
+
+<p>Building routes in a function that returns a <code>Router</code> is the recommended shape: it is trivially testable on a bare Express app, with no service involved.</p>
+
+<h3>The error handler</h3>
+
+<p>One complete error handler is appended automatically. It keys off generic signals — never a specific validation library:</p>
+
+<table>
+  <tr><th>Condition</th><th>Response</th></tr>
+  <tr><td>Error carries a <code>status</code> / <code>statusCode</code></td><td>that status</td></tr>
+  <tr><td>Malformed JSON body</td><td><code>400</code></td></tr>
+  <tr><td>Body over the size limit</td><td><code>413</code></td></tr>
+  <tr><td>Client aborted the request</td><td><code>499</code></td></tr>
+  <tr><td>Anything else</td><td><code>500</code>, logged</td></tr>
+</table>
+
+<p>A route signals a specific status by attaching one to the error it throws — and a validation error reaches <code>400</code> the same way, by carrying <code>status: 400</code>:</p>
+
+<pre><code>api.<span class="fn">addRoute</span>(<span class="st">'get'</span>, <span class="st">'/orders/:id'</span>, (req, res) => {
+  <span class="kw">const</span> order = <span class="fn">lookup</span>(req.params.id);
+
+  <span class="kw">if</span> (! order) <span class="kw">throw</span> <span class="ty">Object</span>.<span class="fn">assign</span>(<span class="kw">new</span> <span class="ty">Error</span>(<span class="st">'not found'</span>), { status: <span class="nu">404</span> });
+
+  res.<span class="fn">json</span>(order);
+});</code></pre>
+
+<h3>Options</h3>
+
+<table>
+  <tr><th>Option</th><th>Default</th><th>Description</th></tr>
+  <tr><td><code>port</code></td><td><code>NET_DEFAULT_PORT</code>, else <code>80</code></td><td>Port to bind.</td></tr>
+  <tr><td><code>json</code></td><td><code>true</code></td><td><code>true</code>, <code>{ limit: '32mb' }</code> to size it, or <code>false</code> to disable.</td></tr>
+  <tr><td><code>raw</code></td><td><code>false</code></td><td>Parse the body as raw bytes — for a proxy that forwards bodies untouched.</td></tr>
+  <tr><td><code>basePath</code></td><td><code>''</code></td><td>Prefix prepended to every route.</td></tr>
+  <tr><td><code>pingable</code></td><td><code>true</code></td><td>Mount <code>GET /ping</code>.</td></tr>
+  <tr><td><code>rateLimit</code></td><td><code>null</code></td><td>Per-IP request-rate limiting — see below.</td></tr>
+  <tr><td><code>tls</code></td><td>—</td><td><code>{ cert, key }</code> upgrades the listener to HTTPS.</td></tr>
+  <tr><td><code>requestTimeout</code><br><code>headersTimeout</code></td><td>Node defaults</td><td>The <code>http.Server</code> deadlines, in ms. <code>0</code> disables — e.g. for an endpoint that receives large streamed uploads.</td></tr>
+</table>
+
+<h4>Default port</h4>
+<p>A server's port resolves in precedence order: an explicit <code>port</code> in the spec → the <code>NET_DEFAULT_PORT</code> environment variable → <code>80</code>. With <code>80</code>, container-internal URLs need no <code>:port</code>. A host that disallows low ports sets <code>NET_DEFAULT_PORT</code> once in its environment, and every server without an explicit port follows — no code change.</p>
+
+<h4>Rate limiting</h4>
+<p><code>rateLimit</code> caps requests per client IP. Two forms:</p>
+<pre><code>rateLimit: <span class="st">'60/m'</span>                               <span class="cm">// 60 per minute — fixed window</span>
+rateLimit: { max: <span class="nu">60</span>, unit: <span class="st">'m'</span>, rolling: <span class="kw">true</span> }  <span class="cm">// rolling (sliding) window</span></code></pre>
+<p>The string form is a fixed window — the count resets on each boundary. The object form with <code>rolling: true</code> is a sliding trailing window, with no burst at the boundary. Over-limit requests receive <code>429</code>.</p>
+
+<h3>Lifecycle</h3>
+
+<pre><code><span class="kw">await</span> api.<span class="fn">start</span>();   <span class="cm">// bind the port, begin accepting</span>
+<span class="kw">await</span> api.<span class="fn">stop</span>();    <span class="cm">// graceful drain; the handle is reusable afterwards</span>
+api.<span class="fn">isUp</span>();          <span class="cm">// → boolean</span>
+api.status;          <span class="cm">// 'down' | 'starting' | 'up' | 'closing'</span></code></pre>
+
+<p>Declared servers stop automatically on service shutdown, so an explicit <code>stop()</code> is only for restarts or tests. <code>configure(partialSpec)</code> changes options on a stopped server — it throws if the server is up.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="ws-server">
+<h2>WebSocket server</h2>
+
+<p>The <code>ws</code> server kind is a managed WebSocket server. It owns the connection registry, a heartbeat with dead-connection sweep, JSON-frame parsing, and per-client error isolation — you supply what connections and messages <em>mean</em>, through hooks.</p>
+
+<pre><code><span class="kw">import</span> SK, { <span class="kw">type</span> <span class="ty">WsServerHandle</span> } <span class="kw">from</span> <span class="st">'@devvir/service-kit'</span>;
+
+SK.<span class="fn">declare</span>({ servers: { type: <span class="st">'ws'</span> } });
+
+SK.<span class="fn">run</span>(<span class="kw">async</span> (service) => {
+  <span class="kw">const</span> ws = service.servers.<span class="fn">get</span>() <span class="kw">as</span> <span class="ty">WsServerHandle</span>;
+
+  ws.<span class="fn">onConnect</span>((client) => client.socket.<span class="fn">send</span>(<span class="st">'welcome'</span>));
+  ws.<span class="fn">onMessage</span>((client, data) => service.logger.<span class="fn">info</span>(data.<span class="fn">toString</span>()));
+
+  <span class="kw">await</span> ws.<span class="fn">start</span>();
+});</code></pre>
+
+<h3>Connections</h3>
+
+<p>Each connection is a <code>WsServerClient</code> — <code>{ id, socket, data }</code>. <code>id</code> is a generated UUID, <code>socket</code> is the raw WebSocket, and <code>data</code> is a free-form per-client object you own — store identity, subscriptions, anything:</p>
+
+<pre><code>ws.<span class="fn">onConnect</span>((client, req) => {
+  <span class="kw">const</span> url = <span class="kw">new</span> <span class="ty">URL</span>(req.url ?? <span class="st">'/'</span>, <span class="st">'http://x'</span>);
+
+  client.data.apiKey = url.searchParams.<span class="fn">get</span>(<span class="st">'api-key'</span>) ?? <span class="kw">undefined</span>;
+});
+
+ws.<span class="fn">onDisconnect</span>((client) => <span class="fn">cleanup</span>(client.id));</code></pre>
+
+<h3>Commands</h3>
+
+<p>For a JSON protocol with an <code>op</code> field, register command handlers by op name — the server parses each frame and dispatches:</p>
+
+<pre><code>ws.<span class="fn">addCommand</span>(<span class="st">'subscribe'</span>,   (client, msg) => <span class="fn">subscribe</span>(client, msg.args));
+ws.<span class="fn">addCommand</span>(<span class="st">'unsubscribe'</span>, (client, msg) => <span class="fn">unsubscribe</span>(client, msg.args));
+
+<span class="cm">// or many at once</span>
+ws.<span class="fn">addCommands</span>({ subscribe, unsubscribe });</code></pre>
+
+<p>A frame that is not JSON, or carries no matching command, falls through to the <code>onMessage</code> hooks instead — use those for raw frames or non-op protocols.</p>
+
+<h3>Broadcast and built-ins</h3>
+
+<pre><code>ws.<span class="fn">broadcast</span>(<span class="ty">JSON</span>.<span class="fn">stringify</span>({ type: <span class="st">'tick'</span>, price }));  <span class="cm">// to every open client</span>
+
+<span class="kw">for</span> (<span class="kw">const</span> client <span class="kw">of</span> ws.<span class="fn">clients</span>()) <span class="fn">notify</span>(client);    <span class="cm">// iterate the registry</span></code></pre>
+
+<p>On by default: a <strong>heartbeat</strong> (<code>pingable</code>; interval <code>heartbeat</code> ms, default 30s) that pings every client and terminates any that miss a pong — dead connections are swept without the application noticing; a <code>ping</code>→<code>pong</code> text shortcut; and per-client error isolation, so one handler throwing never disturbs another connection. <code>pingable: false</code> turns the heartbeat off.</p>
+
+<p>Lifecycle mirrors the express server — <code>start()</code>, <code>stop()</code>, <code>status</code>, and automatic close-all on shutdown.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="fetch-client">
+<h2>Fetch client</h2>
+
+<p>The <code>fetch</code> client is a configured HTTP client — a base URL, retries, timeouts, a status policy, and clean transition logging layered over Node's <code>fetch</code>.</p>
+
+<pre><code><span class="kw">import</span> SK, { <span class="kw">type</span> <span class="ty">FetchClientHandle</span> } <span class="kw">from</span> <span class="st">'@devvir/service-kit'</span>;
+
+SK.<span class="fn">declare</span>({
+  clients: { name: <span class="st">'vault'</span>, type: <span class="st">'fetch'</span>, url: <span class="st">'http://vault'</span> },
+});
+
+SK.<span class="fn">run</span>(<span class="kw">async</span> (service) => {
+  <span class="kw">const</span> vault = service.clients.<span class="fn">get</span>(<span class="st">'vault'</span>) <span class="kw">as</span> <span class="ty">FetchClientHandle</span>;
+
+  <span class="kw">const</span> files = <span class="kw">await</span> vault.<span class="fn">get</span>(<span class="st">'/files'</span>);       <span class="cm">// → parsed JSON</span>
+  <span class="kw">await</span> vault.<span class="fn">post</span>(<span class="st">'/files/today/rows'</span>, rows);   <span class="cm">// JSON body, serialised</span>
+});</code></pre>
+
+<p>A fetch client is stateless — there is no <code>start()</code>. Declare it, take the handle, call it.</p>
+
+<h3>JSON helpers and raw requests</h3>
+
+<p><code>get</code>, <code>post</code>, <code>put</code>, <code>patch</code>, and <code>delete</code> are JSON sugar — they resolve to parsed JSON, serialise an object body, and set the content type. For full control, <code>request()</code> carries the exact <code>fetch</code> signature and returns a real <code>Response</code>:</p>
+
+<pre><code><span class="kw">const</span> res = <span class="kw">await</span> vault.<span class="fn">request</span>(<span class="st">'/files/today'</span>, { method: <span class="st">'PUT'</span>, body: stream, duplex: <span class="st">'half'</span> });
+
+<span class="kw">if</span> (! res.ok) <span class="kw">throw</span> <span class="kw">new</span> <span class="ty">Error</span>(<span class="st">`HTTP ${res.status}`</span>);</code></pre>
+
+<p>A relative path is resolved against the configured <code>url</code>; an absolute URL overrides it.</p>
+
+<h3>Status policy</h3>
+
+<p>What happens to a response is declarative:</p>
+<ul class="bullets">
+  <li><strong>2xx</strong> — the JSON helpers resolve to the parsed body.</li>
+  <li><strong><code>retryOn</code> statuses</strong> — retried with backoff. Default <code>[429, 502, 503, 504]</code>.</li>
+  <li><strong><code>passThrough</code> statuses</strong> — the JSON helpers resolve to <code>null</code> instead of throwing. Default none.</li>
+  <li><strong>any other non-2xx</strong> — throws.</li>
+</ul>
+
+<pre><code><span class="kw">const</span> file = <span class="kw">await</span> vault.<span class="fn">get</span>(<span class="st">'/files/x'</span>, { passThrough: [<span class="nu">404</span>] });  <span class="cm">// 404 → null, not a throw</span></code></pre>
+
+<h3>Retry and timeouts</h3>
+
+<p>Retries are on by default — capped exponential backoff, retrying both <code>retryOn</code> statuses and network errors. By default it retries <strong>forever</strong>; that is safe precisely because it is never silent (see transition logging). Cap it with <code>attempts</code>:</p>
+
+<pre><code>clients: {
+  name:    <span class="st">'vault'</span>,
+  type:    <span class="st">'fetch'</span>,
+  url:     <span class="st">'http://vault'</span>,
+  retry:   { attempts: <span class="nu">5</span> },     <span class="cm">// cap at 5 — omit to retry forever</span>
+  retryOn: [<span class="nu">429</span>, <span class="nu">503</span>],          <span class="cm">// statuses that retry</span>
+  timeout: <span class="nu">30_000</span>,              <span class="cm">// per-request deadline (ms)</span>
+}</code></pre>
+
+<p>A <code>429</code> is handled first-class: the client honours <code>Retry-After</code> and <code>x-ratelimit-reset</code>, and otherwise backs off at the cap. The per-request timeout aborts a stuck request — but is skipped automatically for a streaming body (a <code>ReadableStream</code> upload of unbounded duration), so a healthy large upload is never cut off. <code>retry</code>, <code>retryOn</code>, <code>passThrough</code>, and <code>timeout</code> can each be overridden per request.</p>
+
+<h3>Transition logging</h3>
+
+<p>This is what makes "retry forever" safe. The client tracks whether each target is reachable, and logs only the <em>transitions</em> — never a line per attempt:</p>
+<ul class="bullets">
+  <li><strong>Down</strong> — the first failure after a healthy state logs one warning.</li>
+  <li><strong>Still down</strong> — a single reminder roughly once a minute while the outage lasts.</li>
+  <li><strong>Recovered</strong> — the first success after an outage logs one info line.</li>
+</ul>
+<p>An hour-long outage is three log lines and a heartbeat, not thousands.</p>
+
+<h3>Auth</h3>
+
+<p>Well-known schemes are pure spec — no callback:</p>
+<pre><code>auth: { bearer: process.env.TOKEN }
+auth: { basic:  { user, pass } }
+auth: { apiKey: { header: <span class="st">'X-API-Key'</span>, value: key } }</code></pre>
+
+<p>Anything bespoke — HMAC request signing, expiring credentials — uses the <code>sign</code> hook: a function handed <code>{ method, url, body }</code> that returns the headers for that one request.</p>
+
+<pre><code>clients: {
+  name: <span class="st">'exchange'</span>,
+  type: <span class="st">'fetch'</span>,
+  url:  <span class="st">'https://api.exchange.com'</span>,
+  sign: (req) => <span class="fn">signRequest</span>(req, secret),
+}</code></pre>
+</section>
+
+<!-- ============================================================ -->
+<section id="ws-client">
+<h2>WebSocket client</h2>
+
+<p>The <code>ws</code> client is a managed WebSocket connection. It owns the lifecycle — single-flight reconnection with capped backoff, a heartbeat that detects dead connections, transition logging, and messages that survive reconnects — so the caller never hand-rolls a reconnect loop.</p>
+
+<pre><code><span class="kw">import</span> SK, { <span class="kw">type</span> <span class="ty">WsClientHandle</span> } <span class="kw">from</span> <span class="st">'@devvir/service-kit'</span>;
+
+SK.<span class="fn">declare</span>({
+  clients: { name: <span class="st">'feed'</span>, type: <span class="st">'ws'</span>, url: <span class="st">'wss://stream.example.com'</span> },
+});
+
+SK.<span class="fn">run</span>(<span class="kw">async</span> (service) => {
+  <span class="kw">const</span> feed = service.clients.<span class="fn">get</span>(<span class="st">'feed'</span>) <span class="kw">as</span> <span class="ty">WsClientHandle</span>;
+
+  feed.<span class="fn">onMessage</span>((data) => <span class="fn">handle</span>(<span class="ty">JSON</span>.<span class="fn">parse</span>(data.<span class="fn">toString</span>())));
+
+  <span class="kw">await</span> feed.<span class="fn">start</span>();   <span class="cm">// dials; resolves on first open</span>
+});</code></pre>
+
+<h3>Reconnection</h3>
+
+<p>If the connection drops, the client reconnects on its own — no caller code. The loop is <strong>single-flight</strong>: the <code>error</code> and <code>close</code> events from one failure, and any repeats during an outage, collapse into exactly one pending attempt. Attempts never pile up. Backoff is capped exponential, reset on a successful open; a <code>429</code> on the upgrade jumps straight to the cap. Reachability transitions are logged the way the fetch client logs them — one line down, one line up.</p>
+
+<h3>Sending, and surviving reconnects</h3>
+
+<p><code>send()</code> writes to the current socket. A message that must hold for the life of the connection — a subscription, an auth frame — should instead be registered with <code>sendOnOpen()</code>, which (re)sends it on every open, reconnects included:</p>
+
+<pre><code>feed.<span class="fn">send</span>(<span class="ty">JSON</span>.<span class="fn">stringify</span>({ op: <span class="st">'ping'</span> }));     <span class="cm">// one-off</span>
+
+<span class="kw">const</span> sub = feed.<span class="fn">sendOnOpen</span>(<span class="ty">JSON</span>.<span class="fn">stringify</span>({ op: <span class="st">'subscribe'</span>, args: [<span class="st">'trades'</span>] }));
+<span class="cm">// re-sent automatically on every reconnect — sub.stop() to cancel</span></code></pre>
+
+<p>For anything more involved, <code>on('open', …)</code> is the durable hook — it fires on every (re)connection.</p>
+
+<h3>Events</h3>
+
+<p><code>on(event, handler)</code> takes the lifecycle events and any native <code>ws</code> event. Listeners are <strong>durable</strong> — re-applied to each replacement socket, so reconnection stays transparent:</p>
+
+<table>
+  <tr><th>Event</th><th>When</th></tr>
+  <tr><td><code>open</code></td><td>Each (re)connection opens.</td></tr>
+  <tr><td><code>close</code></td><td>The socket closes.</td></tr>
+  <tr><td><code>reconnecting</code></td><td>A reconnect is scheduled — the delay (ms) is the argument.</td></tr>
+  <tr><td><code>message</code>, <code>ping</code>, <code>pong</code>, <code>error</code></td><td>The native <code>ws</code> events.</td></tr>
+</table>
+
+<h3>Heartbeat and credentials</h3>
+
+<p>A heartbeat (<code>heartbeat</code> ms, default 30s; <code>0</code> disables) pings the server and terminates the connection when a pong is missed — a dead connection becomes a fast reconnect instead of a silent stall.</p>
+
+<p>The <code>url</code> may be a <strong>factory</strong> — <code>() =&gt; string | Promise&lt;string&gt;</code> — re-invoked on every connect. This is how freshly-signed, expiring credentials reach each new connection:</p>
+
+<pre><code>clients: {
+  name: <span class="st">'private-feed'</span>,
+  type: <span class="st">'ws'</span>,                          <span class="cm">// required — a factory url has no scheme to sniff</span>
+  url:  () => <span class="fn">signWsUrl</span>(credentials),
+}</code></pre>
+
+<p>Lifecycle: <code>start()</code> dials and resolves on the first open; <code>stop()</code> closes and stops reconnecting (the handle stays reusable); declared clients stop automatically on shutdown.</p>
 </section>
 
 <!-- ============================================================ -->
@@ -730,6 +1130,10 @@ SK.<span class="fn">run</span>(<span class="kw">async</span> (service) => {
 <div class="sig">service.providers.connect(name: string): Promise&lt;unknown&gt;<br>service.providers.connect(names: string[]): Promise&lt;unknown[]&gt;</div>
 <p>Lazily connects a configured provider and returns the connection. Call inside <code>.run()</code> when the connection is needed. Returns the underlying client (e.g. <code>MongoClient</code>, <code>Broker</code>).</p>
 
+<h4>Servers &amp; clients</h4>
+<div class="sig">service.servers: ServersAPI<br>service.clients: ClientsAPI</div>
+<p>The <code>Net</code> plugin's APIs for declared HTTP/WS servers and outbound clients. See <a href="#api-net">Servers &amp; Clients</a>.</p>
+
 <h4>Logging</h4>
 <div class="sig">service.logger: pino.Logger</div>
 <p>Structured logger scoped to the service. Use it anywhere you have access to the service.</p>
@@ -750,6 +1154,8 @@ SK.<span class="fn">run</span>(<span class="kw">async</span> (service) => {
   <tr><td><code>state</code></td><td>Record&lt;string, unknown&gt;</td><td><code>{}</code></td><td>Initial mutable state. Access via <code>service.state()</code>.</td></tr>
   <tr><td><code>healthcheck</code></td><td>boolean | number | { port?, message? }</td><td><code>true</code></td><td><code>true</code>: port 3000. <code>false</code>: disabled. Number: port. Object: full config.</td></tr>
   <tr><td><code>providers</code></td><td>Record&lt;string, ProviderSpec&gt;</td><td><code>{}</code></td><td>Provider configurations. See <a href="#providers">Providers</a>.</td></tr>
+  <tr><td><code>servers</code></td><td>ServerSpec | ServerSpec[]</td><td>—</td><td>HTTP/WS servers. See <a href="#net">Servers &amp; clients</a>.</td></tr>
+  <tr><td><code>clients</code></td><td>ClientSpec | ClientSpec[]</td><td>—</td><td>HTTP/WS outbound clients. See <a href="#net">Servers &amp; clients</a>.</td></tr>
 </table>
 
 <h4>ProviderSpec</h4>
@@ -761,6 +1167,33 @@ SK.<span class="fn">run</span>(<span class="kw">async</span> (service) => {
 </table>
 
 <p>Provider-specific fields (e.g., <code>useBroker</code>, <code>topology</code> for RabbitMQ) are also accepted — the provider handler reads them from the spec object.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="api-net">
+<h2>Servers &amp; Clients</h2>
+
+<p>The <code>Net</code> plugin adds <code>service.servers</code> and <code>service.clients</code>. Both expose the same collection API; the handles differ by kind. See <a href="#net">Servers &amp; clients</a> for the guide.</p>
+
+<h4>service.servers / service.clients</h4>
+<div class="sig">get(name?: string): Handle<br>create(spec?: Spec | string): Handle<br>clone(name: string, overrides?: Partial&lt;Spec&gt;): Handle<br>all(): Handle[]<br>has(name: string): boolean</div>
+<p><code>get()</code> with no argument returns the sole instance, and throws if there are several. <code>create()</code> builds a runtime instance from a spec object, a bare type string, or kind defaults. <code>clone()</code> instantiates from a <code>template: true</code> entry. <code>service.servers.create()</code> takes an optional second <code>routes</code> argument, applied via <code>addRoutes</code>.</p>
+
+<h4>ExpressServerHandle</h4>
+<div class="sig">addRoute(method, path, ...handlers): this<br>addRoutes(routes): this<br>use(...middleware): this<br>mount(basePath, router): this<br>setBase(path): this<br>start(): Promise&lt;this&gt; &nbsp; stop(): Promise&lt;this&gt;<br>dispose(): Promise&lt;void&gt;<br>configure(partialSpec): this<br>isUp(): boolean &nbsp; isDown(): boolean<br>status: 'down' | 'starting' | 'up' | 'closing'<br>app: express.Application &nbsp; server: http.Server | null</div>
+<p>Routes and middleware are cumulative. <code>configure()</code> throws while the server is up. <code>app</code> and <code>server</code> are escape hatches.</p>
+
+<h4>WsServerHandle</h4>
+<div class="sig">addCommand(op, handler): this &nbsp; addCommands(commands): this<br>onConnect(handler): this &nbsp; onDisconnect(handler): this<br>onMessage(handler): this<br>broadcast(data): void<br>clients(): Iterable&lt;WsServerClient&gt;<br>start(): Promise&lt;this&gt; &nbsp; stop(): Promise&lt;this&gt;<br>dispose(): Promise&lt;void&gt;<br>configure(partialSpec): this<br>isUp(): boolean &nbsp; isDown(): boolean<br>status: 'down' | 'starting' | 'up' | 'closing'<br>server: WebSocketServer | null</div>
+<p>A <code>WsServerClient</code> is <code>{ id: string, socket: WebSocket, data: Record&lt;string, unknown&gt; }</code>.</p>
+
+<h4>FetchClientHandle</h4>
+<div class="sig">get&lt;T&gt;(path, opts?): Promise&lt;T | null&gt;<br>post / put / patch / delete&lt;T&gt;(path, body?, opts?): Promise&lt;T | null&gt;<br>request(input, init?): Promise&lt;Response&gt;<br>configure(partialSpec): this<br>dispose(): void</div>
+<p>The JSON helpers resolve to parsed JSON, or to <code>null</code> for a <code>passThrough</code> status. <code>request()</code> returns the raw <code>Response</code>; its <code>init</code> extends <code>RequestInit</code> with <code>retry</code>, <code>retryOn</code>, <code>passThrough</code>, and <code>timeout</code>. <code>configure()</code> is always allowed — the client is stateless.</p>
+
+<h4>WsClientHandle</h4>
+<div class="sig">start(): Promise&lt;this&gt; &nbsp; stop(): this<br>dispose(): void<br>send(data): void<br>sendOnOpen(message | message[]): { stop(): void }<br>onMessage(handler): this<br>on(event, handler): this &nbsp; off(event, handler): this<br>configure(partialSpec): this<br>isUp(): boolean &nbsp; isDown(): boolean<br>status: 'down' | 'connecting' | 'open' | 'reconnecting'<br>socket: WebSocket | null</div>
+<p><code>configure()</code> throws while the client is up. <code>on()</code> listeners are durable across reconnects.</p>
 </section>
 
 <!-- ============================================================ -->

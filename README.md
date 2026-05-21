@@ -1,6 +1,6 @@
 # @devvir/service-kit
 
-A lightweight toolkit for Node.js microservices. Handles the scaffolding — health checks, graceful shutdown, provider connections, and structured logging — so your service focuses on its tasks.
+A lightweight toolkit for Node.js microservices. Handles the scaffolding — health checks, graceful shutdown, provider connections, HTTP and WebSocket servers and clients, and structured logging — so your service focuses on its tasks.
 
 ## Install
 
@@ -66,6 +66,33 @@ SK.run(async (service: Service) => {
   // start consuming...
 });
 ```
+
+---
+
+Declare HTTP/WebSocket servers and outbound clients. The kit owns the boilerplate — routing, the error handler, retries, reconnection, and clean transition logs:
+
+```ts
+import SK, { type ExpressServerHandle, type FetchClientHandle } from '@devvir/service-kit';
+
+SK.declare({
+  name:    'api',
+  servers: { type: 'express' },
+  clients: { name: 'upstream', type: 'fetch', url: process.env.UPSTREAM_URL },
+});
+
+SK.run(async (service) => {
+  const upstream = service.clients.get('upstream') as FetchClientHandle;
+  const api      = service.servers.get() as ExpressServerHandle;
+
+  api.addRoute('get', '/status', async (_req, res) => {
+    res.json(await upstream.get('/health'));
+  });
+
+  await api.start();
+});
+```
+
+A `fetch` client retries transient failures with capped backoff and logs an outage once, not once per attempt; a `ws` client reconnects with single-flight backoff. Both go from declaration to working handle with no hand-rolled loop.
 
 ---
 

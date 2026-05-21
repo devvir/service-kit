@@ -8,6 +8,7 @@ let skDefaults: PartialConfig = {
     plugins.health,
     plugins.shutdown,
     plugins.providers,
+    plugins.net,
   ],
   spec: {
     name: 'service',

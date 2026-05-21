@@ -1,7 +1,7 @@
 import type { Service } from '..';
 import type { ActiveEntry, Connection, ProvidersAPI, ProviderSpec } from './types';
 import { lookupProvider } from './registry';
-import { mergeRetryConfig, withRetry } from './retry.js';
+import { mergeRetryConfig, withRetry } from '../support/retry';
 
 export function validateConfiguredProviders(service: Service): void {
   const providers = (service.spec() as any).providers as Record<string, ProviderSpec> | undefined;
