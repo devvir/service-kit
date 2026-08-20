@@ -11,6 +11,8 @@ export * from './providers';
 export * from './net/types';
 export type { WsClientHandle, WsClientSpec, WsData, WsStatus } from './net/clients/ws';
 export type { FetchClientHandle, FetchClientSpec, FetchInit, SignFn } from './net/clients/fetch';
+export { guardBody } from './net/clients/fetch';
+export type { BodyGuard } from './net/clients/fetch';
 export type { ExpressServerHandle, ExpressServerSpec, RouteContribution } from './net/servers/express';
 export type {
   WsServerHandle, WsServerSpec, WsServerClient,

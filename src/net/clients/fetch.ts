@@ -31,6 +31,14 @@ export interface FetchInit extends RequestInit {
   passThrough?: number[];
   /** Override the per-request timeout (ms); `0` disables it. */
   timeout?:     number;
+  /**
+   * Override how long the response body may go **silent** (ms); `0` disables it.
+   *
+   * Distinct from `timeout`, which bounds the wait for headers. This bounds the
+   * gap between body chunks, so a large download is never cut off for being
+   * large — only for having stopped.
+   */
+  stallTimeout?: number;
 }
 
 export interface FetchClientSpec extends NetSpec {
@@ -39,6 +47,7 @@ export interface FetchClientSpec extends NetSpec {
   url?:         string;
   headers?:     Record<string, string>;
   timeout?:     number;
+  stallTimeout?: number;
   retry?:       Partial<RetryConfig>;
   retryOn?:     number[];
   passThrough?: number[];
@@ -62,6 +71,8 @@ interface ResolvedConfig {
   url:         string;
   headers:     Record<string, string>;
   timeout:     number;
+  /** `undefined` means "nobody chose" — the JSON helpers then apply their own default. */
+  stallTimeout?: number;
   retry:       RetryConfig;
   retryOn:     number[];
   passThrough: number[];
@@ -70,9 +81,129 @@ interface ResolvedConfig {
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+
+/**
+ * How long a **bounded** body may go silent before it is treated as dead.
+ *
+ * Applied by the JSON helpers, which read a whole document and can therefore
+ * say that silence is always a fault. `request()` returns the body untouched
+ * unless a stall timeout is asked for, because a raw response may legitimately
+ * be a long-lived stream that says nothing for minutes at a time.
+ */
+const DEFAULT_STALL_MS = 30_000;
 const DEFAULT_RETRY_ON   = [429, 502, 503, 504];
 
 const sleep = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms));
+
+/** Statuses the `Response` constructor refuses to give a body to. */
+const BODYLESS = new Set([101, 103, 204, 205, 304]);
+
+const stalled = (ms: number): Error =>
+  Object.assign(new Error(`Response body went silent for ${ms}ms`), { name: 'StallTimeoutError' });
+
+/** How a response body is watched: what may end it, and who wants to know. */
+export interface BodyGuard {
+  /** Silence allowed between chunks, in ms. `0` or absent watches without a clock. */
+  stallMs?:   number;
+  /** The body went quiet for `stallMs`. Raised before the reader is answered. */
+  onStall?:   () => void;
+  /** The body is finished with — ended, failed, or cancelled. Called exactly once. */
+  onSettled?: () => void;
+}
+
+/**
+ * A response whose body is bounded by **silence rather than size**.
+ *
+ * `fetch` resolves when the headers arrive, so a deadline around the call
+ * guards only the wait for a reply. Everything after it is unguarded: a server
+ * that sends headers and then stops leaves whoever reads the body waiting for
+ * ever, and a deadline covering the read is not the answer either, since it
+ * would abort a large download for being large.
+ *
+ * So the clock here measures the gap between chunks and is restarted by every
+ * one of them. A body that keeps arriving is never interrupted, however long it
+ * takes; a body that stops is a fault within `stallMs` of stopping.
+ *
+ * **The error is raised on our own stream rather than through the abort.**
+ * Aborting is asked for as well — a stalled body is still holding a socket —
+ * but nothing here waits for the abort to be honoured, so a reader is answered
+ * whether or not it is.
+ *
+ * `onSettled` is the other half, and the reason a caller may want this with no
+ * clock at all: a request is not over when its headers arrive, and anything
+ * counting what is in flight has to know when the transfer actually ended. It
+ * fires once, whether the body ended, failed, or was cancelled unread — and
+ * immediately when there is no body to wait for.
+ */
+export const guardBody = (res: Response, guard: BodyGuard): Response => {
+  const { stallMs = 0, onStall, onSettled } = guard;
+
+  let settled = false;
+
+  const settle = (): void => {
+    if (settled) return;
+
+    settled = true;
+    onSettled?.();
+  };
+
+  if (! res.body || BODYLESS.has(res.status)) {
+    settle();
+
+    return res;
+  }
+
+  if (stallMs <= 0 && ! onSettled) return res;
+
+  const source = res.body.getReader();
+
+  const stream = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+
+      try {
+        const step = await Promise.race([
+          source.read(),
+          new Promise<never>((_, reject) => {
+            if (stallMs > 0) timer = setTimeout(() => reject(stalled(stallMs)), stallMs);
+          }),
+        ]);
+
+        if (step.done) {
+          settle();
+          controller.close();
+        } else {
+          controller.enqueue(step.value);
+        }
+      } catch (err) {
+        onStall?.();
+        void source.cancel().catch(() => {});
+        settle();
+        controller.error(err);
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+
+    cancel: reason => {
+      settle();
+
+      return source.cancel(reason);
+    },
+  });
+
+  const guarded = new Response(stream, {
+    status:     res.status,
+    statusText: res.statusText,
+    headers:    res.headers,
+  });
+
+  // Neither survives the constructor, and both are read by ordinary callers.
+  Object.defineProperty(guarded, 'url',        { value: res.url,        configurable: true });
+  Object.defineProperty(guarded, 'redirected', { value: res.redirected, configurable: true });
+
+  return guarded;
+};
 
 // ── The client ────────────────────────────────────────────────────────────────
 
@@ -126,6 +257,14 @@ class FetchClient implements FetchClientHandle {
     const streaming = init.body instanceof ReadableStream;
     const timeoutMs = init.timeout ?? (streaming ? 0 : this.#config.timeout);
 
+    /**
+     * **Left off unless somebody asked for it.** `request()` hands back a live
+     * response, and a caller may be holding it open on purpose — an event
+     * stream says nothing between events, and that is not a fault. The JSON
+     * helpers know their body is a whole document and pass their own default.
+     */
+    const stallMs = init.stallTimeout ?? this.#config.stallTimeout ?? 0;
+
     let attempt = 0;
 
     while (true) {
@@ -169,7 +308,7 @@ class FetchClient implements FetchClientHandle {
 
       this.#reach.up();
 
-      return res;
+      return guardBody(res, { stallMs, onStall: () => controller?.abort() });
     }
   }
 
@@ -199,6 +338,7 @@ class FetchClient implements FetchClientHandle {
       url:         s.url ?? '',
       headers:     s.headers ?? {},
       timeout:     s.timeout ?? DEFAULT_TIMEOUT_MS,
+      stallTimeout: s.stallTimeout,
       retry:       mergeRetryConfig(s.retry),
       retryOn:     s.retryOn ?? DEFAULT_RETRY_ON,
       passThrough: s.passThrough ?? [],
@@ -208,7 +348,11 @@ class FetchClient implements FetchClientHandle {
   }
 
   async #json<T>(path: string, init: FetchInit): Promise<T | null> {
-    const res = await this.request(path, init);
+    // Reading a whole document, so silence is always a fault — see DEFAULT_STALL_MS.
+    const res = await this.request(path, {
+      ...init,
+      stallTimeout: init.stallTimeout ?? this.#config.stallTimeout ?? DEFAULT_STALL_MS,
+    });
 
     if (res.ok) {
       return res.json() as Promise<T>;
@@ -265,7 +409,8 @@ class FetchClient implements FetchClientHandle {
 
   /** Strip our own additions so the rest is a plain `RequestInit` for `fetch`. */
   #fetchInit(init: FetchInit): RequestInit {
-    const { retry: _r, retryOn: _ro, passThrough: _pt, timeout: _t, headers: _h, signal: _s, ...rest } = init;
+    const { retry: _r, retryOn: _ro, passThrough: _pt, timeout: _t, stallTimeout: _st,
+      headers: _h, signal: _s, ...rest } = init;
 
     return rest;
   }

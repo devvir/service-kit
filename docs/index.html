@@ -678,10 +678,25 @@ SK.<span class="fn">run</span>(<span class="kw">async</span> (service) => {
   url:     <span class="st">'http://vault'</span>,
   retry:   { attempts: <span class="nu">5</span> },     <span class="cm">// cap at 5 — omit to retry forever</span>
   retryOn: [<span class="nu">429</span>, <span class="nu">503</span>],          <span class="cm">// statuses that retry</span>
-  timeout: <span class="nu">30_000</span>,              <span class="cm">// per-request deadline (ms)</span>
+  timeout: <span class="nu">30_000</span>,              <span class="cm">// wait for a reply, in ms</span>
+  stallTimeout: <span class="nu">30_000</span>,         <span class="cm">// silence allowed mid-body, in ms</span>
 }</code></pre>
 
-<p>A <code>429</code> is handled first-class: the client honours <code>Retry-After</code> and <code>x-ratelimit-reset</code>, and otherwise backs off at the cap. The per-request timeout aborts a stuck request — but is skipped automatically for a streaming body (a <code>ReadableStream</code> upload of unbounded duration), so a healthy large upload is never cut off. <code>retry</code>, <code>retryOn</code>, <code>passThrough</code>, and <code>timeout</code> can each be overridden per request.</p>
+<p>A <code>429</code> is handled first-class: the client honours <code>Retry-After</code> and <code>x-ratelimit-reset</code>, and otherwise backs off at the cap. <code>retry</code>, <code>retryOn</code>, <code>passThrough</code>, <code>timeout</code>, and <code>stallTimeout</code> can each be overridden per request.</p>
+
+<h3>Two clocks, and why size is not one of them</h3>
+
+<p><code>timeout</code> bounds the wait for a <em>reply</em>. It is cleared the moment the response headers arrive, so it answers one question — did the server answer — and it is skipped automatically for a streaming body (a <code>ReadableStream</code> upload of unbounded duration), so a healthy large upload is never cut off.</p>
+
+<p>Everything after the headers is a different question, and a deadline is the wrong tool for it. A download of a gigabyte is not a fault; a download that stopped is. So <code>stallTimeout</code> measures the <em>gap between body chunks</em> and is restarted by every one of them. A body that keeps arriving is never interrupted, however long it takes in total; a body that goes quiet fails within <code>stallTimeout</code> of going quiet.</p>
+
+<pre><code><span class="cm">// 700ms between chunks, for as long as it likes — fine.</span>
+<span class="cm">// Nothing at all for 30s — StallTimeoutError.</span>
+<span class="kw">const</span> report = <span class="kw">await</span> api.<span class="fn">get</span>(<span class="st">'/huge-report'</span>, { stallTimeout: <span class="nu">30_000</span> });</code></pre>
+
+<p>The JSON helpers apply a stall timeout by default, because a JSON body is a whole document and silence in the middle of one is always a fault. <code>request()</code> does <strong>not</strong>: it hands back a live response, and a caller may be holding it open deliberately — an event stream says nothing between events. Ask for <code>stallTimeout</code> explicitly there, or pass <code>0</code> anywhere to switch it off.</p>
+
+<p>The stall error is raised on the response body itself rather than through the abort signal. Aborting is requested too — a stalled body is still holding a socket — but nothing waits for that abort to be honoured, so a reader is always answered.</p>
 
 <h3>Transition logging</h3>
 

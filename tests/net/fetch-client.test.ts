@@ -141,4 +141,69 @@ describe('fetch client', () => {
     // No timeout controller — a large upload must not be aborted mid-stream.
     expect(fetchMock.mock.calls[0][1].signal).toBeUndefined();
   });
+
+  // ── body stall guard ────────────────────────────────────────────────────────
+
+  /**
+   * A body that arrives in pieces, with a gap before each one. A gap of
+   * `Infinity` never delivers, which is what a stalled server looks like.
+   */
+  const trickle = (pieces: string[], gapMs: number): Response => {
+    let at = 0;
+
+    return new Response(new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (at >= pieces.length) return void controller.close();
+
+        const piece = pieces[at++]!;
+
+        return new Promise<void>(resolve => {
+          if (gapMs === Infinity) return;
+
+          setTimeout(() => { controller.enqueue(new TextEncoder().encode(piece)); resolve(); }, gapMs);
+        });
+      },
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+
+  it('get() rejects once the body has gone silent for the stall timeout', async () => {
+    fetchMock.mockResolvedValueOnce(trickle(['{"a":'], Infinity));
+
+    await expect(makeClient({ url: 'http://svc', stallTimeout: 40 }).get('/slow'))
+      .rejects.toMatchObject({ name: 'StallTimeoutError' });
+  });
+
+  it('get() lets a slow body finish, however long it takes in total', async () => {
+    fetchMock.mockResolvedValueOnce(trickle(['{"a"', ':', '1}'], 30));
+
+    // Three gaps of 30ms is 90ms end to end, well past the 40ms stall timeout —
+    // and none of them is a stall, because each one is followed by a chunk.
+    expect(await makeClient({ url: 'http://svc', stallTimeout: 40 }).get('/slow')).toEqual({ a: 1 });
+  });
+
+  it('leaves the body of a raw request() alone unless a stall timeout is asked for', async () => {
+    const res = json({ ok: true });
+
+    fetchMock.mockResolvedValueOnce(res);
+
+    expect(await makeClient({ url: 'http://svc' }).request('/stream')).toBe(res);
+  });
+
+  it('guards a raw request() when one is asked for, keeping the response intact', async () => {
+    fetchMock.mockResolvedValueOnce(trickle(['{"a":'], Infinity));
+
+    const res = await makeClient({ url: 'http://svc' }).request('/stream', { stallTimeout: 40 });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('application/json');
+    await expect(res.text()).rejects.toMatchObject({ name: 'StallTimeoutError' });
+  });
+
+  it('never guards the body when the stall timeout is disabled', async () => {
+    const res = json({ ok: true });
+
+    fetchMock.mockResolvedValueOnce(res);
+
+    expect(await makeClient({ url: 'http://svc' }).request('/x', { stallTimeout: 0 })).toBe(res);
+  });
 });
